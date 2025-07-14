@@ -1,5 +1,12 @@
 from twilio.rest import Client
 import json
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+auth_token = os.getenv('TWILIO_AUTH_TOKEN')
 
 # Load quiz
 with open("daily_quiz.json", "r", encoding="utf-8") as f:
@@ -16,8 +23,6 @@ question_text = (
     "Reply with A, B, C or D!"
 )
 
-account_sid = 'AC4824518f33e5c5947ea93c97a9eaa74f'
-auth_token = '405b98b9d0f64ea003841c70f3b716ec'
 client = Client(account_sid, auth_token)
 
 client.messages.create(

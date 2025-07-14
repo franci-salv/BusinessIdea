@@ -1,0 +1,106 @@
+{
+  "title": "Hats and Hillsides",
+  "date": "12th July 2025",
+  "questions": [
+    {
+      "question": "Which Teletubby is yellow?",
+      "options": [
+        "Laa-Laa",
+        "Tinky Winky",
+        "Po",
+        "Dipsy"
+      ],
+      "correct_answer": "Laa-Laa"
+    },
+    {
+      "question": "Which chocolate bar was sold as a Marathon bar until 1990?",
+      "options": [
+        "Snickers",
+        "Bounty",
+        "Milky Way",
+        "Lion"
+      ],
+      "correct_answer": "Snickers"
+    },
+    {
+      "question": "What is the capital of Ghana?",
+      "options": [
+        "Tamale",
+        "Accra",
+        "Tema",
+        "Kumasi"
+      ],
+      "correct_answer": "Accra"
+    },
+    {
+      "question": "What nationality was the physicist Hertz?",
+      "options": [
+        "Swedish",
+        "German",
+        "Russian",
+        "Finnish"
+      ],
+      "correct_answer": "German"
+    },
+    {
+      "question": "Which song begins 'Punctured bicycle on a hillside, desolate'?",
+      "options": [
+        "Bicycle Race",
+        "Strawberry Fields",
+        "Country House",
+        "This Charming Man"
+      ],
+      "correct_answer": "This Charming Man"
+    },
+    {
+      "question": "What is Wales’ second most populous city?",
+      "options": [
+        "Newport",
+        "Merthyr Tydfil",
+        "Cardiff",
+        "Swansea"
+      ],
+      "correct_answer": "Swansea"
+    },
+    {
+      "question": "The Stamp Act Congress marked the start of The American Revolution in what year?",
+      "options": [
+        "1845",
+        "1805",
+        "1765",
+        "1725"
+      ],
+      "correct_answer": "1765"
+    },
+    {
+      "question": "Which British comedian and 'magician' used to perform in a fez?",
+      "options": [
+        "Benny Hill",
+        "Tommy Cooper",
+        "Rowan Atkinson",
+        "Spike Milligan"
+      ],
+      "correct_answer": "Tommy Cooper"
+    },
+    {
+      "question": "Natalie Imbruglia covered which US band's single Torn?",
+      "options": [
+        "Mudhoney",
+        "Hole",
+        "Soundgarden",
+        "Ednaswap"
+      ],
+      "correct_answer": "Ednaswap"
+    },
+    {
+      "question": "Matt is a pocket cartoon in which British newspaper?",
+      "options": [
+        "Guardian",
+        "Observer",
+        "Telegraph",
+        "Times"
+      ],
+      "correct_answer": "Telegraph"
+    }
+  ]
+}

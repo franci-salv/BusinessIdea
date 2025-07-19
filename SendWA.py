@@ -9,14 +9,18 @@ import os
 app = Flask(__name__)
 
 # Load quiz
-with open("daily_quiz.json", "r", encoding="utf-8") as f:
-    quiz_data = json.load(f)
+def load_quiz():
+    with open("daily_quiz.json", "r", encoding="utf-8") as f:
+        return json.load(f)
+quiz_data = load_quiz()
 
 # Keep track of each user's question index
 user_progress = {}
 
 @app.route("/whatsapp", methods=['POST'])
 def whatsapp_reply():
+    quiz_data = load_quiz()
+
     incoming_msg = request.form.get('Body').strip().upper()
     user_number = request.form.get('From')
 

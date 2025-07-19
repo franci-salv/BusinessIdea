@@ -1,6 +1,10 @@
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import json
+import os
+
+
+
 
 app = Flask(__name__)
 
@@ -26,12 +30,26 @@ def whatsapp_reply():
     index = user_progress[user_number]
     current_q = quiz_data["questions"][index]
 
-    # Check if answer is correct
+# Input validation
+    valid_inputs = ["A", "B", "C", "D"]
+
+# Check if user already finished the quiz
+    if user_number in user_progress and user_progress[user_number] >= 2:
+        msg.body("🛑 You've already completed today's quiz! Come back tomorrow for new questions.")
+        return str(response)
+
+# If input is not A–D, warn user
+    if incoming_msg not in valid_inputs:
+        msg.body("🤖 I'm only programmed to understand answers A, B, C, or D.\nIf you're in the middle of the quiz, make sure to reply with one of those options.\nIf you've already completed the quiz, come back tomorrow!")
+        return str(response)
+
+# Continue with answer checking
     correct_letter = get_correct_letter(current_q)
     if incoming_msg == correct_letter:
         msg.body("✅ Correct!")
     else:
         msg.body(f"❌ Wrong! The correct answer was {correct_letter}) {current_q['correct_answer']}")
+
 
     # Move to next question
     index += 1
@@ -60,4 +78,5 @@ def get_correct_letter(q):
     return ["A", "B", "C", "D"][index]
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+

@@ -3,7 +3,21 @@ import json
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+# Absolute path to your env file
+env_path = os.path.join(os.path.dirname(__file__), "secret.env")
+load_dotenv(dotenv_path=env_path)
+
+# Debug prints
+print("SID loaded:", os.getenv("TWILIO_ACCOUNT_SID")[:6] if os.getenv("TWILIO_ACCOUNT_SID") else "❌ MISSING")
+print("Token loaded:", "✅" if os.getenv("TWILIO_AUTH_TOKEN") else "❌ MISSING")
+
+print("Script is running from:", os.getcwd())
+print("Expecting .env at:", env_path)
+
+with open("secret.env", "r") as f:
+    print("ENV FILE CONTENTS:")
+    print(f.read())
+
 
 account_sid = os.getenv('TWILIO_ACCOUNT_SID')
 auth_token = os.getenv('TWILIO_AUTH_TOKEN')

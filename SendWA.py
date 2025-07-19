@@ -35,7 +35,7 @@ def whatsapp_reply():
 
     # Move to next question
     index += 1
-    if index < len(quiz_data["questions"]):
+    if index < 2:
         user_progress[user_number] = index
         next_q = quiz_data["questions"][index]
         msg.body("\n" + format_question(next_q, index + 1))

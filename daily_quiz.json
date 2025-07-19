@@ -1,106 +1,106 @@
 {
-  "title": "Hats and Hillsides",
-  "date": "12th July 2025",
+  "title": "Fish and Forrest",
+  "date": "19th July 2025",
   "questions": [
     {
-      "question": "Which Teletubby is yellow?",
+      "question": "San Jose is the capital of which country?",
       "options": [
-        "Laa-Laa",
-        "Tinky Winky",
-        "Po",
-        "Dipsy"
+        "Nicaragua",
+        "Panama",
+        "Honduras",
+        "Costa Rica"
       ],
-      "correct_answer": "Laa-Laa"
+      "correct_answer": "Costa Rica"
     },
     {
-      "question": "Which chocolate bar was sold as a Marathon bar until 1990?",
+      "question": "Who played Forrest Gump in the 1994 film?",
       "options": [
-        "Snickers",
-        "Bounty",
-        "Milky Way",
-        "Lion"
+        "Tom Hanks",
+        "Brad Pitt",
+        "Liam Neeson",
+        "Tom Cruise"
       ],
-      "correct_answer": "Snickers"
+      "correct_answer": "Tom Hanks"
     },
     {
-      "question": "What is the capital of Ghana?",
+      "question": "Who played House in the US medical drama?",
       "options": [
-        "Tamale",
-        "Accra",
-        "Tema",
-        "Kumasi"
-      ],
-      "correct_answer": "Accra"
-    },
-    {
-      "question": "What nationality was the physicist Hertz?",
-      "options": [
-        "Swedish",
-        "German",
-        "Russian",
-        "Finnish"
-      ],
-      "correct_answer": "German"
-    },
-    {
-      "question": "Which song begins 'Punctured bicycle on a hillside, desolate'?",
-      "options": [
-        "Bicycle Race",
-        "Strawberry Fields",
-        "Country House",
-        "This Charming Man"
-      ],
-      "correct_answer": "This Charming Man"
-    },
-    {
-      "question": "What is Wales’ second most populous city?",
-      "options": [
-        "Newport",
-        "Merthyr Tydfil",
-        "Cardiff",
-        "Swansea"
-      ],
-      "correct_answer": "Swansea"
-    },
-    {
-      "question": "The Stamp Act Congress marked the start of The American Revolution in what year?",
-      "options": [
-        "1845",
-        "1805",
-        "1765",
-        "1725"
-      ],
-      "correct_answer": "1765"
-    },
-    {
-      "question": "Which British comedian and 'magician' used to perform in a fez?",
-      "options": [
-        "Benny Hill",
-        "Tommy Cooper",
         "Rowan Atkinson",
-        "Spike Milligan"
+        "Hugh Laurie",
+        "Michael Palin",
+        "Stephen Fry"
       ],
-      "correct_answer": "Tommy Cooper"
+      "correct_answer": "Hugh Laurie"
     },
     {
-      "question": "Natalie Imbruglia covered which US band's single Torn?",
+      "question": "Who played Rose in Titanic?",
       "options": [
-        "Mudhoney",
-        "Hole",
-        "Soundgarden",
-        "Ednaswap"
+        "Sandra Bullock",
+        "Meryl Streep",
+        "Julia Roberts",
+        "Kate Winslet"
       ],
-      "correct_answer": "Ednaswap"
+      "correct_answer": "Kate Winslet"
     },
     {
-      "question": "Matt is a pocket cartoon in which British newspaper?",
+      "question": "Robert Zimmerman is the real name of which musician?",
       "options": [
-        "Guardian",
-        "Observer",
-        "Telegraph",
-        "Times"
+        "Bruce Springsteen",
+        "James Brown",
+        "Jimi Hendrix",
+        "Bob Dylan"
       ],
-      "correct_answer": "Telegraph"
+      "correct_answer": "Bob Dylan"
+    },
+    {
+      "question": "Which fish could also be called a Pilchard?",
+      "options": [
+        "Haddock",
+        "Hake",
+        "Cod",
+        "Sardine"
+      ],
+      "correct_answer": "Sardine"
+    },
+    {
+      "question": "The Sonoran desert is located in which country?",
+      "options": [
+        "Mexico",
+        "Kenya",
+        "India",
+        "Australia"
+      ],
+      "correct_answer": "Mexico"
+    },
+    {
+      "question": "What is a Kipper?",
+      "options": [
+        "Salmon",
+        "Herring",
+        "Mackerel",
+        "Cod"
+      ],
+      "correct_answer": "Herring"
+    },
+    {
+      "question": "Who wrote Matilda Who Told Lies and Was Burned to Death?",
+      "options": [
+        "Pam Ayres",
+        "AA Milne",
+        "T. S. Eliot",
+        "Hilaire Belloc"
+      ],
+      "correct_answer": "Hilaire Belloc"
+    },
+    {
+      "question": "Which book of the bible starts 'In the beginning was the word'?",
+      "options": [
+        "Genesis",
+        "Matthew",
+        "John",
+        "Psalms"
+      ],
+      "correct_answer": "John"
     }
   ]
 }

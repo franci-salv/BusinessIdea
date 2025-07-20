@@ -85,3 +85,14 @@ def get_correct_letter(q):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+
+
+@app.route("/refresh_quiz", methods=["POST"])
+def refresh_quiz():
+    if request.headers.get("X-API-Key") != os.getenv("REFRESH_KEY"):
+        return "⛔ Unauthorized", 403
+
+    load_quiz()
+    print("✅ Quiz reloaded via webhook!")
+    return "✅ Quiz reloaded", 200

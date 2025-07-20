@@ -2,6 +2,7 @@ from twilio.rest import Client
 import json
 from dotenv import load_dotenv
 import os
+import requests
 
 # Absolute path to your env file
 env_path = os.path.join(os.path.dirname(__file__), "secret.env")
@@ -44,3 +45,16 @@ client.messages.create(
     from_='whatsapp:+14155238886',
     to='whatsapp:+393773753088'
 )
+
+
+# Notify Flask app to reload quiz
+refresh_key = os.getenv("REFRESH_KEY")
+
+response = requests.post(
+    "https://user-ui-quiz.onrender.com/refresh_quiz",
+    headers={"X-API-Key": refresh_key}
+)
+
+print("📨 Sent refresh signal to Flask app")
+print("Response:", response.status_code, response.text)
+

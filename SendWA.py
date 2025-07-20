@@ -1,61 +1,63 @@
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
+from apscheduler.schedulers.background import BackgroundScheduler
 import json
 import os
-
-
-
+import time
 
 app = Flask(__name__)
 
-# Load quiz
-def load_quiz():
-    with open("daily_quiz.json", "r", encoding="utf-8") as f:
-        return json.load(f)
-quiz_data = load_quiz()
+quiz_data = {}
 
-# Keep track of each user's question index
+def load_quiz():
+    global quiz_data
+    print("📅 Loading new quiz data...")
+    with open("daily_quiz.json", "r", encoding="utf-8") as f:
+        quiz_data = json.load(f)
+
+# Load quiz initially
+load_quiz()
+
+# Scheduler to refresh every 24h
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=load_quiz, trigger="interval", hours=24)
+scheduler.start()
+
+# Prevent scheduler from being killed with the app
+import atexit
+atexit.register(lambda: scheduler.shutdown())
+
 user_progress = {}
 
 @app.route("/whatsapp", methods=['POST'])
 def whatsapp_reply():
-    quiz_data = load_quiz()
-
     incoming_msg = request.form.get('Body').strip().upper()
     user_number = request.form.get('From')
 
     response = MessagingResponse()
     msg = response.message()
 
-    # If new user, start at Q0
     if user_number not in user_progress:
         user_progress[user_number] = 0
 
     index = user_progress[user_number]
-    current_q = quiz_data["questions"][index]
 
-# Input validation
-    valid_inputs = ["A", "B", "C", "D"]
-
-# Check if user already finished the quiz
-    if user_number in user_progress and user_progress[user_number] >= 2:
+    if user_progress[user_number] >= 2:
         msg.body("🛑 You've already completed today's quiz! Come back tomorrow for new questions.")
         return str(response)
 
-# If input is not A–D, warn user
+    valid_inputs = ["A", "B", "C", "D"]
     if incoming_msg not in valid_inputs:
-        msg.body("🤖 I'm only programmed to understand answers A, B, C, or D.\nIf you're in the middle of the quiz, make sure to reply with one of those options.\nIf you've already completed the quiz, come back tomorrow!")
+        msg.body("🤖 I'm only programmed to understand answers A, B, C, or D.\nIf you've already completed the quiz, come back tomorrow!")
         return str(response)
 
-# Continue with answer checking
+    current_q = quiz_data["questions"][index]
     correct_letter = get_correct_letter(current_q)
     if incoming_msg == correct_letter:
         msg.body("✅ Correct!")
     else:
         msg.body(f"❌ Wrong! The correct answer was {correct_letter}) {current_q['correct_answer']}")
 
-
-    # Move to next question
     index += 1
     if index < 2:
         user_progress[user_number] = index
@@ -83,4 +85,3 @@ def get_correct_letter(q):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-

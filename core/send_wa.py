@@ -12,8 +12,10 @@ quiz_data = {}
 def load_quiz():
     global quiz_data
     print("📅 Loading new quiz data...")
-    with open("daily_quiz.json", "r", encoding="utf-8") as f:
+    quiz_path = os.path.join(os.path.dirname(__file__), "..", "data", "daily_quiz.json")
+    with open(quiz_path, "r", encoding="utf-8") as f:
         quiz_data = json.load(f)
+
 
 # Load quiz initially
 load_quiz()
@@ -31,6 +33,9 @@ user_progress = {}
 
 @app.route("/whatsapp", methods=['POST'])
 def whatsapp_reply():
+    if os.getenv("TEST_MODE") == "1":
+        print("⚠️ Skipping user response logic — TEST_MODE active")
+        return "🛑 Response temporarily disabled", 200
     incoming_msg = request.form.get('Body').strip().upper()
     user_number = request.form.get('From')
 
@@ -83,8 +88,6 @@ def get_correct_letter(q):
     index = q['options'].index(correct)
     return ["A", "B", "C", "D"][index]
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
 
 
@@ -96,3 +99,7 @@ def refresh_quiz():
     load_quiz()
     print("✅ Quiz reloaded via webhook!")
     return "✅ Quiz reloaded", 200
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

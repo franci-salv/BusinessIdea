@@ -56,3 +56,5 @@ def send_quiz_message(to_number: str, message_override=None, refresh_url=None):
         print("Response:", response.status_code, response.text)
     except Exception as e:
         print("⚠️ Failed to refresh Flask app:", e)
+
+messageMe = send_quiz_message("+393773753088")

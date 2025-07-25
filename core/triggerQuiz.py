@@ -11,6 +11,7 @@ load_dotenv(dotenv_path=env_path)
 account_sid = os.getenv('TWILIO_ACCOUNT_SID')
 auth_token = os.getenv('TWILIO_AUTH_TOKEN')
 refresh_key = os.getenv("REFRESH_KEY")
+refresh_url = "https://user-ui-quiz.onrender.com/refresh_quiz"
 
 client = Client(account_sid, auth_token)
 
@@ -30,7 +31,18 @@ def format_question_text():
         "Reply with A, B, C or D!"
     )
 
-def send_quiz_message(to_number: str, message_override=None, refresh_url=None):
+def synchronise_quiz_data():
+    try:
+        response = requests.post(
+            refresh_url,
+            headers={"X-API-Key": refresh_key}
+        )
+        print("📨 Sent refresh signal to Flask app")
+        print("Response:", response.status_code, response.text)
+    except Exception as e:
+        print("⚠️ Failed to refresh Flask app:", e)
+
+def send_quiz_message(to_number: str, message_override=None):
     if message_override:
         print("📦 Using message override for testing")
         question_text = message_override
@@ -44,17 +56,10 @@ def send_quiz_message(to_number: str, message_override=None, refresh_url=None):
         to=f'whatsapp:{to_number}'
     )
 
-    if not refresh_url:
-        refresh_url = "https://user-ui-quiz.onrender.com/refresh_quiz"
+    synchronise_quiz_data()
 
-    try:
-        response = requests.post(
-            refresh_url,
-            headers={"X-API-Key": refresh_key}
-        )
-        print("📨 Sent refresh signal to Flask app")
-        print("Response:", response.status_code, response.text)
-    except Exception as e:
-        print("⚠️ Failed to refresh Flask app:", e)
-
-messageMe = send_quiz_message("+393773753088")
+if __name__ == "__main__":
+    # Replace with real user list later
+    user_numbers = ["+393773753088"]
+    for num in user_numbers:
+        send_quiz_message(num)

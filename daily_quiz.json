@@ -1,0 +1,106 @@
+{
+  "title": "Sisters and Superheroes",
+  "date": "25th July 2025",
+  "questions": [
+    {
+      "question": "Pi is approximately 3.14_",
+      "options": [
+        "2",
+        "3",
+        "5",
+        "4"
+      ],
+      "correct_answer": "2"
+    },
+    {
+      "question": "Where in Australia is the MCG located?",
+      "options": [
+        "Brisbane",
+        "Melbourne",
+        "Sydney",
+        "Adelaide"
+      ],
+      "correct_answer": "Melbourne"
+    },
+    {
+      "question": "Which country won the 2010 World Cup?",
+      "options": [
+        "Portugal",
+        "Italy",
+        "Brazil",
+        "Spain"
+      ],
+      "correct_answer": "Spain"
+    },
+    {
+      "question": "Mountaineer Reinhold Messner is what nationality?",
+      "options": [
+        "Greek",
+        "Polish",
+        "Hungarian",
+        "Italian"
+      ],
+      "correct_answer": "Italian"
+    },
+    {
+      "question": "Who was the dictator of Italy during World War II?",
+      "options": [
+        "Joseph Stalin",
+        "Francisco Franco",
+        "Benito Mussolini",
+        "Adolf Hitler"
+      ],
+      "correct_answer": "Benito Mussolini"
+    },
+    {
+      "question": "In sitcom The Good Life, who is married to Jerry?",
+      "options": [
+        "Margo",
+        "Poppy",
+        "Barbara",
+        "Sheila"
+      ],
+      "correct_answer": "Margo"
+    },
+    {
+      "question": "In what year was Everest first climbed?",
+      "options": [
+        "1973",
+        "1953",
+        "1963",
+        "1943"
+      ],
+      "correct_answer": "1953"
+    },
+    {
+      "question": "How many sisters make up Chekhov's 1901 play?",
+      "options": [
+        "Five Sisters",
+        "Four Sisters",
+        "Two Sisters",
+        "Three Sisters"
+      ],
+      "correct_answer": "Three Sisters"
+    },
+    {
+      "question": "Who wrote the hymn Amazing Grace?",
+      "options": [
+        "John Newton",
+        "James Rowe",
+        "Richard Migens",
+        "William Barton"
+      ],
+      "correct_answer": "John Newton"
+    },
+    {
+      "question": "Who played Wonder Woman in the 2017 superhero film?",
+      "options": [
+        "Kiera Knightley",
+        "Jennifer Lawrence",
+        "Gal Gadot",
+        "Emma Stone"
+      ],
+      "correct_answer": "Gal Gadot"
+    }
+  ]
+}

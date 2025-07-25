@@ -20,15 +20,6 @@ def load_quiz():
 # Load quiz initially
 load_quiz()
 
-# Scheduler to refresh every 24h
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=load_quiz, trigger="interval", hours=24)
-scheduler.start()
-
-# Prevent scheduler from being killed with the app
-import atexit
-atexit.register(lambda: scheduler.shutdown())
-
 user_progress = {}
 
 @app.route("/whatsapp", methods=['POST'])

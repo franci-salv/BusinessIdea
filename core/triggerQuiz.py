@@ -21,6 +21,7 @@ def format_question_text():
         quiz_data = json.load(f)
 
     q = quiz_data["questions"][0]
+    print('Message formatting SUCCESS')
     return (
         f"🧠 {quiz_data['title']} — {quiz_data['date']}\n\n"
         f"{q['question']}\n"

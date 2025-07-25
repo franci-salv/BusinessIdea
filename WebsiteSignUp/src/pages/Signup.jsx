@@ -107,7 +107,7 @@ export default function SignupForm() {
             onClick={handleStripeCheckout}
             className="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition"
           >
-            Subscribe for €1/month
+            Subscribe for €3/month
           </button>
         </div>
 

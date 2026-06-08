@@ -66,6 +66,17 @@ class UserDB:
                     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            
+            # Add missing columns if they don't exist
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN quiz_progress INTEGER DEFAULT 0")
+            except:
+                pass
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN today_quiz_date TEXT")
+            except:
+                pass
+            
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS quiz_responses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -240,16 +251,38 @@ def send_next_question(chat_id, user_id, quiz, question_index):
         correct_idx
     )
 
-def handle_answer(chat_id, user_id, callback_data):
-    """Handle poll answer"""
-    # When user answers, Telegram sends poll_answer update, not callback
-    # This is handled in handle_poll_answer
-    pass
-
-def handle_poll_answer(user_id, poll_id, option_id):
-    """Handle poll answers"""
-    # This will be called when user votes
-    pass
+def handle_poll_answer(user_id):
+    """Send next question after user answers poll"""
+    quiz = load_quiz()
+    if not quiz:
+        return
+    
+    progress, quiz_date = user_db.get_user_progress(user_id)
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # Reset if new day
+    if quiz_date != today:
+        progress = 0
+        user_db.set_user_progress(user_id, 0, today)
+    
+    # Move to next question
+    progress += 1
+    user_db.set_user_progress(user_id, progress, today)
+    
+    if progress >= len(quiz["questions"]):
+        send_message(user_id, "🏆 Awesome! You completed all 10 questions! Come back tomorrow!")
+        return
+    
+    # Encouragement
+    import random
+    encouragement = random.choice(ENCOURAGEMENTS)
+    send_message(user_id, f"{encouragement}\n\n⬇️ Next question coming...")
+    
+    import time
+    time.sleep(1)
+    
+    # Send next question
+    send_next_question(user_id, user_id, quiz, progress)
 
 def broadcast_daily_quiz():
     """Send quiz to all subscribed users"""
@@ -338,6 +371,13 @@ def main():
                     username = query["from"].get("username", "user")
                     user_db.add_user(user_id, username)
                     handle_callback(query["id"], query["message"]["chat"]["id"], user_id, query["data"])
+                
+                # Handle poll answers (auto-send next question)
+                elif "poll_answer" in update:
+                    poll_answer = update["poll_answer"]
+                    user_id = poll_answer["user"]["id"]
+                    logger.info(f"✅ User {user_id} answered poll")
+                    handle_poll_answer(user_id)
     
     except KeyboardInterrupt:
         logger.info("👋 Bot stopped")

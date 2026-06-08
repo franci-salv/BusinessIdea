@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 Scheduler for daily quiz delivery at 10:00 AM
-Runs with the main bot in separate thread
+Scrapes quiz at 9:55 AM, sends at 10:00 AM
 """
 
 import os
 import sqlite3
 import logging
 import time
+import subprocess
 from datetime import datetime
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -18,8 +19,26 @@ load_dotenv()
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "users.db")
+SCRAPER_PATH = os.path.join(os.path.dirname(__file__), "..", "core", "Scrape.py")
 
 logger = logging.getLogger(__name__)
+
+def scrape_daily_quiz():
+    """Run the scraper to fetch today's quiz"""
+    logger.info("📥 [SCHEDULER] Scraping daily quiz at 9:55 AM...")
+    try:
+        result = subprocess.run(
+            ["python", SCRAPER_PATH],
+            capture_output=True,
+            timeout=30,
+            cwd=os.path.dirname(SCRAPER_PATH)
+        )
+        if result.returncode == 0:
+            logger.info("✅ [SCHEDULER] Quiz scraped successfully!")
+        else:
+            logger.error(f"[SCHEDULER] Scraper error: {result.stderr.decode()}")
+    except Exception as e:
+        logger.error(f"[SCHEDULER] Error running scraper: {e}")
 
 def broadcast_daily_quiz():
     """Send 'quiz time' message to all subscribed users"""
@@ -64,7 +83,16 @@ def start_scheduler():
     """Start background scheduler"""
     scheduler = BackgroundScheduler()
     
-    # Schedule daily at 10:00 AM (adjust timezone as needed)
+    # Scrape at 9:55 AM
+    scheduler.add_job(
+        scrape_daily_quiz,
+        CronTrigger(hour=9, minute=55),
+        id='scrape_quiz_955am',
+        name='Scrape Quiz at 9:55 AM',
+        replace_existing=True
+    )
+    
+    # Send quiz at 10:00 AM
     scheduler.add_job(
         broadcast_daily_quiz,
         CronTrigger(hour=10, minute=0),
@@ -74,6 +102,6 @@ def start_scheduler():
     )
     
     scheduler.start()
-    logger.info("📅 [SCHEDULER] Started - Daily quiz scheduled for 10:00 AM")
+    logger.info("📅 [SCHEDULER] Started - Daily scrape at 9:55 AM, send at 10:00 AM")
     
     return scheduler

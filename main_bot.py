@@ -12,7 +12,7 @@ import time
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
-from datetime import datetime, time as datetime_time
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(
@@ -36,6 +36,9 @@ API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 # Ensure data directory exists
 Path(os.path.dirname(DB_PATH)).mkdir(parents=True, exist_ok=True)
 
+# Track processed polls to avoid duplicates
+processed_polls = set()
+
 ENCOURAGEMENTS = [
     "🎉 Fantastic! You got it!",
     "⭐ Brilliant answer!",
@@ -47,6 +50,14 @@ ENCOURAGEMENTS = [
     "🌟 Keep going!",
     "🎊 Great thinking!",
     "👏 Well done!"
+]
+
+WRONG_MESSAGES = [
+    "❌ Not quite. Try again next time!",
+    "❌ That wasn't it. Better luck next!",
+    "❌ Close, but not quite!",
+    "❌ Not this time. Keep learning!",
+    "❌ That's incorrect. No worries!"
 ]
 
 class UserDB:
@@ -251,8 +262,18 @@ def send_next_question(chat_id, user_id, quiz, question_index):
         correct_idx
     )
 
-def handle_poll_answer(user_id):
-    """Send next question after user answers poll"""
+def handle_poll_answer(user_id, poll_id, option_id):
+    """Handle poll answer and send next question"""
+    global processed_polls
+    
+    # Prevent duplicate processing
+    poll_key = f"{user_id}_{poll_id}"
+    if poll_key in processed_polls:
+        logger.info(f"⏭️ Poll already processed: {poll_key}")
+        return
+    
+    processed_polls.add(poll_key)
+    
     quiz = load_quiz()
     if not quiz:
         return
@@ -265,23 +286,43 @@ def handle_poll_answer(user_id):
         progress = 0
         user_db.set_user_progress(user_id, 0, today)
     
+    if progress >= len(quiz["questions"]):
+        send_message(user_id, "🏆 All done! You already completed today's quiz!")
+        return
+    
+    # Get current question
+    q = quiz["questions"][progress]
+    correct_idx = q["options"].index(q["correct_answer"])
+    
+    # Check if answer was correct
+    was_correct = (option_id == correct_idx)
+    
+    # Send feedback
+    if was_correct:
+        import random
+        msg = random.choice(ENCOURAGEMENTS)
+        send_message(user_id, msg)
+    else:
+        import random
+        msg = random.choice(WRONG_MESSAGES)
+        correct_answer = q["correct_answer"]
+        send_message(user_id, f"{msg}\n\n💡 The correct answer was: **{correct_answer}**")
+    
+    # Record answer
+    user_db.record_answer(user_id, today, progress + 1, q["options"][option_id], was_correct)
+    
     # Move to next question
     progress += 1
     user_db.set_user_progress(user_id, progress, today)
     
+    time.sleep(0.5)
+    
     if progress >= len(quiz["questions"]):
-        send_message(user_id, "🏆 Awesome! You completed all 10 questions! Come back tomorrow!")
+        send_message(user_id, "🏆 Awesome! You completed all 10 questions today! 🎉")
         return
     
-    # Encouragement
-    import random
-    encouragement = random.choice(ENCOURAGEMENTS)
-    send_message(user_id, f"{encouragement}\n\n⬇️ Next question coming...")
-    
-    import time
-    time.sleep(1)
-    
     # Send next question
+    logger.info(f"➡️ Sending Q{progress + 1} to user {user_id}")
     send_next_question(user_id, user_id, quiz, progress)
 
 def broadcast_daily_quiz():
@@ -376,8 +417,10 @@ def main():
                 elif "poll_answer" in update:
                     poll_answer = update["poll_answer"]
                     user_id = poll_answer["user"]["id"]
-                    logger.info(f"✅ User {user_id} answered poll")
-                    handle_poll_answer(user_id)
+                    poll_id = poll_answer["poll_id"]
+                    option_id = poll_answer["option_ids"][0] if poll_answer.get("option_ids") else 0
+                    logger.info(f"✅ User {user_id} answered option {option_id} in poll {poll_id}")
+                    handle_poll_answer(user_id, poll_id, option_id)
     
     except KeyboardInterrupt:
         logger.info("👋 Bot stopped")

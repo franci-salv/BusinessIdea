@@ -1,6 +1,4 @@
-flask
-twilio
+python-telegram-bot==21.1
 requests
 python-dotenv
 apscheduler
-stripe

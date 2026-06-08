@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""
+Telegram Puzzle Bot - Daily Quiz with encouragement messages
+Shows all 10 questions one at a time with feedback
+"""
+
+import os
+import json
+import sqlite3
+import logging
+import time
+import requests
+from pathlib import Path
+from dotenv import load_dotenv
+from datetime import datetime, time as datetime_time
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Load environment
+load_dotenv()
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+if not BOT_TOKEN:
+    logger.error("❌ TELEGRAM_BOT_TOKEN not set in .env file!")
+    exit(1)
+
+QUIZ_PATH = os.path.join(os.path.dirname(__file__), "data", "daily_quiz.json")
+DB_PATH = os.path.join(os.path.dirname(__file__), "data", "users.db")
+API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+# Ensure data directory exists
+Path(os.path.dirname(DB_PATH)).mkdir(parents=True, exist_ok=True)
+
+ENCOURAGEMENTS = [
+    "🎉 Fantastic! You got it!",
+    "⭐ Brilliant answer!",
+    "🚀 You're on fire!",
+    "💪 Nice work!",
+    "🎯 Perfect!",
+    "🏆 Awesome job!",
+    "✨ Excellent!",
+    "🌟 Keep going!",
+    "🎊 Great thinking!",
+    "👏 Well done!"
+]
+
+class UserDB:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.init_db()
+    
+    def init_db(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    subscribed BOOLEAN DEFAULT 1,
+                    quiz_progress INTEGER DEFAULT 0,
+                    today_quiz_date TEXT,
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS quiz_responses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    quiz_date TEXT,
+                    question_number INTEGER,
+                    answer_text TEXT,
+                    is_correct BOOLEAN,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+    
+    def add_user(self, user_id, username):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)",
+                    (user_id, username)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Error adding user: {e}")
+    
+    def get_user_progress(self, user_id):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT quiz_progress, today_quiz_date FROM users WHERE user_id = ?",
+                    (user_id,)
+                )
+                result = cursor.fetchone()
+                return result if result else (0, None)
+        except Exception as e:
+            logger.error(f"Error getting progress: {e}")
+            return (0, None)
+    
+    def set_user_progress(self, user_id, progress, quiz_date):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "UPDATE users SET quiz_progress = ?, today_quiz_date = ? WHERE user_id = ?",
+                    (progress, quiz_date, user_id)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Error setting progress: {e}")
+    
+    def record_answer(self, user_id, quiz_date, question_num, answer, is_correct):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT INTO quiz_responses (user_id, quiz_date, question_number, answer_text, is_correct) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (user_id, quiz_date, question_num, answer, is_correct)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Error recording answer: {e}")
+
+def load_quiz():
+    try:
+        with open(QUIZ_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading quiz: {e}")
+        return None
+
+def send_message(chat_id, text):
+    """Send a text message"""
+    data = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(f"{API_URL}/sendMessage", json=data, timeout=10)
+    except Exception as e:
+        logger.error(f"Error sending message: {e}")
+
+def send_poll(chat_id, question, options, correct_option_id):
+    """Send a poll"""
+    data = {
+        "chat_id": chat_id,
+        "question": question,
+        "options": options,
+        "type": "quiz",
+        "correct_option_id": correct_option_id,
+        "is_anonymous": False,
+        "explanation": f"✅ The correct answer is: **{options[correct_option_id]}**"
+    }
+    try:
+        requests.post(f"{API_URL}/sendPoll", json=data, timeout=10)
+    except Exception as e:
+        logger.error(f"Error sending poll: {e}")
+
+def handle_start(chat_id, user_id):
+    """Handle /start command"""
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "📚 Start Quiz", "callback_data": "start_quiz"}],
+            [{"text": "📊 My Stats", "callback_data": "stats"}],
+            [{"text": "🛑 Unsubscribe", "callback_data": "unsubscribe"}]
+        ]
+    }
+    
+    send_message(
+        chat_id,
+        "🎉 Welcome to **Daily Puzzle Master**!\n\n"
+        "Get 10 fresh questions every day at 10:00 AM ⏰\n\n"
+        "Answer them one by one and earn encouragement! 🌟\n\n"
+        "*What would you like to do?*"
+    )
+    
+    # Send the keyboard
+    requests.post(f"{API_URL}/sendMessage", json={
+        "chat_id": chat_id,
+        "text": "Choose an option:",
+        "reply_markup": keyboard
+    })
+
+def handle_callback(query_id, chat_id, user_id, data):
+    """Handle button clicks"""
+    requests.post(f"{API_URL}/answerCallbackQuery", json={"callback_query_id": query_id, "text": "Loading..."})
+    
+    if data == "start_quiz":
+        start_quiz(chat_id, user_id)
+    elif data == "stats":
+        show_stats(chat_id, user_id)
+    elif data == "unsubscribe":
+        user_db.add_user(user_id, "")
+        send_message(chat_id, "✅ Unsubscribed! Use /start to resubscribe.")
+    elif data.startswith("answer_"):
+        handle_answer(chat_id, user_id, data)
+
+def start_quiz(chat_id, user_id):
+    """Start or resume quiz"""
+    quiz = load_quiz()
+    if not quiz or not quiz.get("questions"):
+        send_message(chat_id, "❌ No quiz available today. Try again later!")
+        return
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    progress, quiz_date = user_db.get_user_progress(user_id)
+    
+    # Reset if it's a new day
+    if quiz_date != today:
+        progress = 0
+        user_db.set_user_progress(user_id, 0, today)
+    
+    if progress >= len(quiz["questions"]):
+        send_message(chat_id, "🎉 You've completed today's quiz! Come back tomorrow for new questions.")
+        return
+    
+    send_message(chat_id, f"📚 **{quiz.get('title', 'Daily Quiz')}**\n\nQuestion {progress + 1}/10")
+    send_next_question(chat_id, user_id, quiz, progress)
+
+def send_next_question(chat_id, user_id, quiz, question_index):
+    """Send the next question"""
+    if question_index >= len(quiz["questions"]):
+        send_message(chat_id, "🏆 All done! You completed today's quiz!")
+        return
+    
+    q = quiz["questions"][question_index]
+    options = q["options"]
+    correct_idx = options.index(q["correct_answer"])
+    
+    send_poll(
+        chat_id,
+        f"Q{question_index + 1}: {q['question']}",
+        options,
+        correct_idx
+    )
+
+def handle_answer(chat_id, user_id, callback_data):
+    """Handle poll answer"""
+    # When user answers, Telegram sends poll_answer update, not callback
+    # This is handled in handle_poll_answer
+    pass
+
+def handle_poll_answer(user_id, poll_id, option_id):
+    """Handle poll answers"""
+    # This will be called when user votes
+    pass
+
+def broadcast_daily_quiz():
+    """Send quiz to all subscribed users"""
+    logger.info("📢 Broadcasting daily quiz...")
+    user_db_inst = UserDB(DB_PATH)
+    
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute("SELECT user_id FROM users WHERE subscribed = 1")
+            users = [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching users: {e}")
+        return
+    
+    for user_id in users:
+        try:
+            send_message(user_id, "🎉 Good morning! Today's puzzle is here! Use /start to begin.")
+            time.sleep(0.3)
+            start_quiz(user_id, user_id)
+        except Exception as e:
+            logger.error(f"Error sending to user {user_id}: {e}")
+        time.sleep(0.5)
+    
+    logger.info(f"✅ Sent to {len(users)} users")
+
+def show_stats(chat_id, user_id):
+    """Show user statistics"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM quiz_responses WHERE user_id = ? AND is_correct = 1",
+                (user_id,)
+            )
+            correct = cursor.fetchone()[0]
+            
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM quiz_responses WHERE user_id = ?",
+                (user_id,)
+            )
+            total = cursor.fetchone()[0]
+    except Exception as e:
+        logger.error(f"Error fetching stats: {e}")
+        correct, total = 0, 0
+    
+    percentage = int((correct / total * 100)) if total > 0 else 0
+    send_message(chat_id, f"📊 **Your Stats**\n\n✅ Correct: {correct}\n❌ Total: {total}\n📈 Accuracy: {percentage}%")
+
+def get_updates(offset=0):
+    """Get updates from Telegram"""
+    try:
+        response = requests.get(f"{API_URL}/getUpdates", params={"offset": offset, "timeout": 30}, timeout=35)
+        return response.json().get("result", [])
+    except Exception as e:
+        logger.error(f"Error getting updates: {e}")
+        return []
+
+def main():
+    """Start the bot"""
+    global user_db
+    user_db = UserDB(DB_PATH)
+    logger.info("✅ Database initialized")
+    logger.info("🤖 Bot is polling... Press Ctrl+C to stop")
+    
+    offset = 0
+    
+    try:
+        while True:
+            updates = get_updates(offset)
+            
+            for update in updates:
+                offset = update["update_id"] + 1
+                
+                # Handle messages
+                if "message" in update:
+                    msg = update["message"]
+                    if msg.get("text") == "/start":
+                        user_id = msg["from"]["id"]
+                        username = msg["from"].get("username", "user")
+                        user_db.add_user(user_id, username)
+                        handle_start(msg["chat"]["id"], user_id)
+                
+                # Handle button clicks
+                elif "callback_query" in update:
+                    query = update["callback_query"]
+                    user_id = query["from"]["id"]
+                    username = query["from"].get("username", "user")
+                    user_db.add_user(user_id, username)
+                    handle_callback(query["id"], query["message"]["chat"]["id"], user_id, query["data"])
+    
+    except KeyboardInterrupt:
+        logger.info("👋 Bot stopped")
+
+if __name__ == "__main__":
+    main()

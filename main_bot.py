@@ -173,6 +173,26 @@ class UserDB:
                 conn.commit()
         except Exception as e:
             logger.error(f"Error recording answer: {e}")
+    
+    def get_today_leaderboard(self, quiz_date):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT
+                      qr.user_id,
+                      COALESCE(u.username, 'Player') AS username,
+                      SUM(qr.is_correct) AS correct,
+                      COUNT(*) AS answered
+                    FROM quiz_responses qr
+                    LEFT JOIN users u ON u.user_id = qr.user_id
+                    WHERE qr.quiz_date = ?
+                    GROUP BY qr.user_id
+                    ORDER BY correct DESC, answered ASC, qr.user_id ASC
+                """, (quiz_date,))
+                return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"Error fetching leaderboard: {e}")
+            return []
 
 def load_quiz():
     try:
@@ -281,6 +301,7 @@ def handle_start(chat_id, user_id):
         "inline_keyboard": [
             [{"text": "📚 Start Quiz", "callback_data": "start_quiz"}],
             [{"text": "📊 My Stats", "callback_data": "stats"}],
+            [{"text": "🏆 Today's Leaderboard", "callback_data": "leaderboard"}],
             [{"text": "🛑 Unsubscribe", "callback_data": "unsubscribe"}]
         ]
     }
@@ -308,6 +329,8 @@ def handle_callback(query_id, chat_id, user_id, data):
         start_quiz(chat_id, user_id)
     elif data == "stats":
         show_stats(chat_id, user_id)
+    elif data == "leaderboard":
+        show_leaderboard(chat_id, user_id)
     elif data == "unsubscribe":
         user_db.add_user(user_id, "")
         send_message(chat_id, "✅ Unsubscribed! Use /start to resubscribe.")
@@ -481,6 +504,42 @@ def show_stats(chat_id, user_id):
         chat_id,
         f"📊 **Your Stats**\n\n✅ Correct: {correct}\n❌ Wrong: {wrong}\n📝 Answered: {total}\n📈 Accuracy: {percentage}%"
     )
+
+def show_leaderboard(chat_id, user_id):
+    """Show today's leaderboard with user rank"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    leaderboard = user_db.get_today_leaderboard(today)
+    
+    if not leaderboard:
+        send_message(chat_id, "🏆 **Today's Leaderboard**\n\nNo scores yet today. Be the first to take the quiz!")
+        return
+    
+    quiz = load_quiz()
+    quiz_title = quiz.get("title", "Daily Quiz") if quiz else "Daily Quiz"
+    
+    message = f"🏆 **Today's Leaderboard**\n{quiz_title} — {today}\n\n"
+    
+    medals = ["🥇", "🥈", "🥉"]
+    for idx, (db_user_id, username, correct, answered) in enumerate(leaderboard[:3]):
+        medal = medals[idx] if idx < 3 else "  "
+        display_name = f"@{username}" if username and username != "Player" else f"Player {db_user_id % 10000}"
+        message += f"{medal} {display_name} — {correct}/10\n"
+    
+    user_rank = None
+    user_score = None
+    for idx, (db_user_id, username, correct, answered) in enumerate(leaderboard):
+        if db_user_id == user_id:
+            user_rank = idx + 1
+            user_score = correct
+            break
+    
+    total_players = len(leaderboard)
+    message += f"\n**You: {user_score or 0}/10** — Rank #{user_rank or '—'} of {total_players}"
+    
+    if user_rank is None:
+        message += "\nStart the quiz to join today's board!"
+    
+    send_message(chat_id, message)
 
 def get_updates(offset=0):
     """Get updates from Telegram"""

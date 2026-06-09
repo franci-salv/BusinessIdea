@@ -1,0 +1,2356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Francesco Salvatore</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script>
+  function copyEmail() {
+    const email = "francisalv@icloud.com"; // <-- put your email here
+    navigator.clipboard.writeText(email).then(() => {
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = "Copied!";
+      setTimeout(() => {
+        btn.textContent = originalText;
+      }, 2000); // reset after 2 sec
+    });
+  }
+</script>
+  <style>
+    :root {
+      --bg: #0a0f1a;
+      --fg: #e8eaf6;
+      --muted: #9ca3af;
+      --surface-1: #111827;
+      --surface-2: #1f2937;
+      --surface-3: #374151;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --accent: #f59e0b;
+      --accent-hover: #d97706;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.25rem;
+      --space-6: 1.5rem;
+      --space-8: 2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    }
+
+ /* --- Travels Slider Section (Full Image Version) --- */
+.travel-slider-wrapper {
+  position: relative;
+  padding: var(--space-12) 0;
+  margin-top: var(--space-4);
+  overflow: hidden; /* Keeps the line from bleeding out */
+}
+
+/* The Horizontal Line - Locked to the top node position */
+.travel-line {
+  position: absolute;
+  top: 52px; 
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    var(--primary) 20%, 
+    var(--accent) 80%, 
+    transparent
+  );
+  z-index: 1;
+}
+
+.travel-container {
+  display: flex;
+  gap: var(--space-8);
+  overflow-x: auto;
+  /* Top padding must accommodate the node + line placement */
+  padding: 60px var(--space-6) 20px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none; /* Firefox */
+  position: relative;
+  z-index: 2;
+  /* Ensures cards hang from the top so dots stay on the line */
+  align-items: flex-start; 
+}
+
+.travel-container::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.travel-card {
+  flex: 0 0 320px;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* The Glowing Node - Centered on the line */
+.travel-node {
+  width: 14px;
+  height: 14px;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  position: absolute;
+  top: -15px; /* Aligns node center with the 52px line */
+  left: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 0 10px var(--primary);
+  transition: all 0.3s ease;
+  z-index: 3;
+}
+
+.travel-card:hover .travel-node {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 20px var(--accent);
+  transform: translateX(-50%) scale(1.3);
+}
+
+.travel-content {
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.3s ease;
+  margin-top: 15px; /* Spacing below the dot */
+}
+
+.travel-card:hover .travel-content {
+  border-color: var(--primary);
+  transform: translateY(5px);
+}
+
+/* FIXED: Map placeholder now respects image aspect ratio */
+.map-placeholder {
+  width: 100%;
+  height: auto; /* Allows height to grow with image */
+  min-height: 100px; /* Prevents collapse before image loads */
+  background: var(--surface-3);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-placeholder img {
+  width: 100%;
+  height: auto;
+  object-fit: contain; /* Shows full image without trimming */
+  filter: brightness(0.9) contrast(1.1);
+  display: block;
+}
+
+.travel-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--fg);
+}
+
+.travel-date {
+  font-size: 0.85rem;
+  color: var(--primary);
+  font-weight: 600;
+  margin: var(--space-1) 0;
+}
+
+.travel-card p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 640px) {
+  .travel-card {
+    flex: 0 0 280px;
+  }
+  .travel-line {
+    top: 52px; /* Consistent alignment */
+  }
+}
+
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, var(--bg) 0%, #0f172a 100%);
+      color: var(--fg);
+      line-height: 1.6;
+      scroll-behavior: smooth;
+    }
+    header {
+      background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+      padding: var(--space-12) var(--space-8);
+      text-align: center;
+      position: relative;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--fg);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      position: relative;
+      z-index: 1;
+    }
+    header p {
+      font-size: 1.25rem;
+      color: var(--muted);
+      margin-top: var(--space-2);
+      position: relative;
+      z-index: 1;
+    }
+    nav {
+      background: var(--surface-2);
+      padding: var(--space-4);
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+    }
+    nav a {
+      margin: 0 var(--space-4);
+      color: var(--fg);
+      text-decoration: none;
+      font-weight: 600;
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-md);
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    
+    nav a:hover {
+      color: var(--primary);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    section {
+      max-width: 1200px;
+      margin: var(--space-12) auto;
+      padding: 0 var(--space-6);
+    }
+    section h2 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--fg);
+      margin-bottom: var(--space-8);
+      text-align: center;
+      position: relative;
+    }
+    section h2::after {
+      content: '';
+      position: absolute;
+      bottom: -var(--space-2);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60px;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      border-radius: 2px;
+    }
+    footer {
+      background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+      width: 100%;
+      text-align: center;
+      padding: var(--space-8);
+      font-size: 0.9rem;
+      color: var(--muted);
+      border-top: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--surface-3) 0%, var(--surface-2) 100%);
+  color: var(--fg);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .card-container {
+    grid-template-columns: repeat(2, 1fr); /* 2 columns on tablets */
+  }
+}
+
+@media (max-width: 600px) {
+  .card-container {
+    grid-template-columns: 1fr; /* 1 column on phones */
+  }
+}
+
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.2), transparent);
+  transition: left 0.5s;
+}
+.btn:hover::before {
+  left: 100%;
+}
+.btn:hover {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  color: white;
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+}
+
+/* Contact Form Styles */
+.contact-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-10);
+  margin-top: var(--space-8);
+}
+
+.contact-form-wrapper {
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+}
+
+.contact-form-wrapper h3 {
+  margin-bottom: var(--space-6);
+  color: var(--primary);
+  font-size: 1.25rem;
+}
+
+.contact-social h3 {
+  margin-bottom: var(--space-6);
+  color: var(--primary);
+  font-size: 1.25rem;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  background: var(--surface-3);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-md);
+  color: var(--fg);
+  padding: var(--space-4);
+  font-family: inherit;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: var(--muted);
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  background: var(--surface-2);
+}
+
+.form-help {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: var(--space-1);
+}
+
+.btn-submit {
+  margin-top: var(--space-4);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  border: none;
+  cursor: pointer;
+  padding: var(--space-4) var(--space-8);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.btn-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.form-status {
+  min-height: var(--space-6);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  font-size: 0.95rem;
+  display: none;
+}
+
+.form-status.success {
+  display: block;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.form-status.error {
+  display: block;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+@media (max-width: 768px) {
+  .contact-container {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .contact-form-wrapper {
+    padding: var(--space-6);
+  }
+}
+
+.card-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.card {
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-md);
+  transition: all 0.3s ease;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.card:hover::before {
+  transform: scaleX(1);
+}
+
+.card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-xl);
+  border-color: var(--primary);
+}
+
+.card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  transition: transform 0.3s ease;
+}
+
+.card:hover img {
+  transform: scale(1.05);
+}
+
+.card h3 {
+  margin: var(--space-3) 0;
+  color: var(--accent);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.card p {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin-bottom: var(--space-4);
+  line-height: 1.6;
+}
+
+/* About Section */
+.about-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-12);
+  align-items: center;
+  margin-top: var(--space-8);
+}
+
+.about-text h2 {
+  text-align: left;
+  margin-bottom: var(--space-6);
+  font-size: 2.5rem;
+}
+
+.about-text p {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  color: var(--muted);
+  margin: 0;
+}
+
+.about-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.profile-img {
+  width: 280px;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 50%;
+  box-shadow: var(--shadow-xl);
+  transition: all 0.3s ease;
+}
+
+.profile-img:hover {
+  transform: scale(1.05);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 768px) {
+  .about-content {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+    text-align: center;
+  }
+  
+  .about-text h2 {
+    text-align: center;
+  }
+  
+  .profile-img {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+/* Mobile-only enhancements (won't affect desktop) */
+@media (max-width: 640px) {
+  header h1 { font-size: 2.1rem; }
+  header p { font-size: 1rem; }
+
+  nav { padding: var(--space-3); }
+  nav a { padding: var(--space-2) var(--space-3); margin: 0 var(--space-2); }
+  /* make nav horizontally scrollable if overflow */
+  nav { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  nav::-webkit-scrollbar { display: none; }
+
+  section { padding: 0 var(--space-4); margin: var(--space-8) auto; }
+
+  .card-container { gap: var(--space-6); }
+  .timeline-card { width: 240px; padding: var(--space-5); }
+
+  .service-card { padding: var(--space-6); gap: var(--space-4); }
+  .btn { padding: var(--space-3) var(--space-5); }
+}
+
+ .timeline-container {
+      position: relative;
+      display: flex;
+      gap: var(--space-6);
+      overflow-x: auto;
+      padding: var(--space-6);
+      scroll-snap-type: x mandatory;
+      margin-top: var(--space-8);
+      scroll-behavior: smooth;
+    }
+
+    /* edge gradients to hint scrollability */
+    .timeline-container::after,
+    .timeline-container::before {
+      content: '';
+      position: sticky;
+      top: 0;
+      width: 48px;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .timeline-container::after {
+      margin-left: auto;
+      right: 0;
+      background: linear-gradient(270deg, var(--surface-1) 0%, rgba(17,24,39,0) 100%);
+    }
+    .timeline-container::before {
+      left: 0;
+      background: linear-gradient(90deg, var(--surface-1) 0%, rgba(17,24,39,0) 100%);
+    }
+
+    /* small non-intrusive scroll hint */
+    .scroll-hint {
+      position: absolute;
+      right: 14px;
+      bottom: 12px;
+      padding: 6px 10px;
+      background: rgba(31,41,55,0.85);
+      color: var(--muted);
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: var(--shadow-sm);
+      transition: opacity .25s ease, transform .25s ease, visibility .25s ease;
+      z-index: 3;
+    }
+    .scroll-hint .chev { font-weight: 700; color: var(--primary); }
+    @media (prefers-reduced-motion: no-preference) {
+      .scroll-hint { animation: nudge 1.8s ease-in-out infinite; }
+      @keyframes nudge { 0%,100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+    }
+    .scroll-hint.hide { opacity: 0; visibility: hidden; transform: translateY(4px); }
+
+    .timeline-card {
+      flex: 0 0 auto;
+      width: 280px;
+      background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      scroll-snap-align: center;
+      box-shadow: var(--shadow-md);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .timeline-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent), var(--primary));
+    }
+    /* nicer embedded links inside timeline cards */
+    .timeline-card p a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      margin: 0 4px;
+      border-radius: 999px;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.22);
+      color: var(--fg);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .timeline-card p a:hover {
+      background: rgba(59,130,246,0.16);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .timeline-card p a::after {
+      content: '↗';
+      font-size: 0.85em;
+      color: var(--primary);
+    }
+
+    .timeline-card:hover {
+      transform: translateY(-8px);
+      box-shadow: var(--shadow-xl);
+      border-color: var(--accent);
+    }
+
+    .timeline-card h3 {
+      color: var(--accent);
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: var(--space-3);
+    }
+
+    .timeline-card p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* optional: hide ugly scrollbar in Chrome/Safari */
+    .timeline-container::-webkit-scrollbar {
+      display: none;
+    }
+    .timeline-container {
+      -ms-overflow-style: none; /* IE */
+      scrollbar-width: none; /* Firefox */
+    }
+
+  .service-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4 cards in a row on desktop */
+  gap: var(--space-6, 1.5rem);
+  margin-top: var(--space-8, 2rem);
+  align-items: start;
+}
+
+.service-card {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  padding: var(--space-6, 1.5rem);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.1));
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer; /* Indicates it can be clicked */
+}
+
+/* Hover Effects */
+.service-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary, #3b82f6), var(--accent, #60a5fa));
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.service-card:hover::before,
+.service-card.active::before {
+  transform: scaleX(1);
+}
+
+.service-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl, 0 10px 15px rgba(0,0,0,0.15));
+  border-color: var(--primary, #3b82f6);
+}
+
+/* Keep header elements aligned */
+.card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.service-icon {
+  font-size: 2.5rem;
+  color: var(--accent, #60a5fa);
+  margin-bottom: 0.5rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.service-card h3 {
+  color: var(--fg, #ffffff);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Details wrapper hidden by default */
+.card-details {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease, opacity 0.4s ease, margin-top 0.4s ease;
+}
+
+/* Expanded state */
+.service-card.active .card-details {
+  max-height: 1000px; /* Arbitrary large number to allow content to flow */
+  opacity: 1;
+  margin-top: 1rem;
+}
+
+.card-details p {
+  color: var(--muted, #94a3b8);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+/* Skillset Grid inside the card */
+.skillset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 2 skills per row inside the card */
+  gap: 0.5rem;
+}
+
+.skill-card {
+  background: linear-gradient(135deg, var(--surface-3) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  padding: 0.4rem;
+  border-radius: var(--radius-md, 6px);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--fg, #e2e8f0);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.skill-card:hover {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  color: white;
+  border-color: var(--primary);
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1024px) {
+  .service-container {
+    grid-template-columns: repeat(2, 1fr); /* 2x2 grid on tablets */
+  }
+}
+
+@media (max-width: 600px) {
+  .service-container {
+    grid-template-columns: 1fr; /* Stack vertically on phones */
+  }
+}
+
+
+/* --- Photos Section (Masonry Layout, Mixed Sizes, Lazy-load Ready) --- */
+.photo-gallery {
+  column-count: 3;                     /* auto wraps into vertical columns */
+  column-gap: var(--space-6);
+  margin-top: var(--space-8);
+  width: 100%;
+}
+
+.photo-gallery img {
+  width: 100%;
+  height: auto;                        /* keep natural aspect ratio */
+  margin-bottom: var(--space-6);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  break-inside: avoid;                 /* prevents weird breaks between columns */
+  page-break-inside: avoid;
+  loading: lazy;
+}
+
+.photo-gallery img:hover {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-xl);
+  border-color: var(--primary);
+}
+
+/* Optional: manual sizing control if you want standout wide/top-row shots */
+.photo-gallery img.wide {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.photo-gallery img.square {
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+.photo-gallery img.tall {
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+}
+
+/* Lightbox Overlay */
+.lightbox {
+  display: none;
+  position: fixed;
+  z-index: 999;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  backdrop-filter: blur(4px);
+  overflow: auto;
+  padding-top: 60px;
+}
+
+.lightbox-content {
+  margin: auto;
+  display: block;
+  max-width: 80%;
+  max-height: 80%;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.close {
+  position: absolute;
+  top: 20px;
+  right: 35px;
+  color: var(--fg);
+  font-size: 2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.close:hover {
+  color: var(--accent);
+}
+
+/* Responsive behavior */
+@media (max-width: 1024px) {
+  .photo-gallery { column-count: 2; }
+}
+/* --- Current Status Button & Modal --- */
+
+.status-btn {
+  margin-top: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+/* Full-screen overlay, similar to lightbox but flex-centered */
+.status-modal {
+  display: none; /* toggled via JS */
+  position: fixed;
+  z-index: 998;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-6);
+}
+
+/* The popup card itself */
+.status-modal-content {
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: var(--shadow-xl);
+  max-width: 480px;
+  width: 100%;
+  padding: var(--space-6) var(--space-6) var(--space-5);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Accent bar on top (like cards/timeline) */
+.status-modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+}
+
+/* Close button (top-right X) */
+.status-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.status-close:hover {
+  color: var(--accent);
+  transform: scale(1.1);
+}
+
+.status-modal-content h3 {
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: 1.4rem;
+  color: var(--fg);
+}
+
+
+
+
+/* Small colored tag on the left */
+.status-tag {
+  flex-shrink: 0;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+}
+
+/* Text body on the right */
+.status-body {
+  flex: 1;
+}
+
+/* Small responsive tweak */
+@media (max-width: 600px) {
+  .status-modal-content {
+    padding: var(--space-5) var(--space-4) var(--space-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .photo-gallery { column-count: 1; }
+  .photo-gallery img {
+    margin-bottom: var(--space-4);
+  }
+}
+
+/* Navigation Buttons Container */
+.status-nav {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.nav-btn {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--primary);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--primary);
+  color: white;
+}
+
+.nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+
+/* --- 3D Printing Hall Expandable Section --- */
+.printing-hall-details {
+  margin-top: var(--space-8);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(17, 24, 39, 0.4);
+}
+
+.printing-hall-summary {
+  list-style: none; /* Removes default arrow */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: var(--space-4);
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  color: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.printing-hall-summary:hover {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--fg);
+}
+
+/* Custom Arrow Rotate */
+.printing-hall-details[open] .printing-hall-summary {
+  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.printing-hall-summary::after {
+  content: '▶';
+  font-size: 0.8rem;
+  transition: transform 0.3s ease;
+}
+
+.printing-hall-details[open] .printing-hall-summary::after {
+  transform: rotate(90deg);
+}
+
+/* Internal Gallery Padding */
+.printing-hall-content {
+  padding: var(--space-6);
+  animation: slideDown 0.4s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Interactive SVG Map Section --- */
+.map-container {
+  position: relative;
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-md);
+  min-height: 520px;
+
+  
+  /* NEW: Allow horizontal swiping on small screens */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch; /* Buttery smooth iOS scrolling */
+  max-width: 1000px;
+  margin: 0 auto;
+  touch-action: pan-x pan-y; 
+}
+
+/* Hide the scrollbar for a cleaner look */
+.map-container::-webkit-scrollbar {
+  display: none;
+}
+.map-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.world-map-svg {
+  width: 100%;
+  min-width: 700px;
+  height: 500px;        /* ← was "auto", SVGs collapse with auto */
+  display: block;       /* ← removes inline gap */
+  stroke: var(--bg);
+  stroke-width: 0.5px;
+  stroke-linejoin: round;
+}
+
+.country-path {
+  fill: var(--surface-3); /* Unvisited color */
+  transition: fill 0.2s ease, filter 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+  /* Removes default blue tap highlight on touch screens */
+  -webkit-tap-highlight-color: transparent; 
+  transform-origin: center;
+}
+
+/* Hover/Focus states */
+/* This media query ensures tap-to-click doesn't leave 'stuck' hover states on touchscreens */
+@media (hover: hover) and (pointer: fine) {
+  .country-path:hover {
+    fill: var(--primary);
+    filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.5));
+    outline: none;
+  }
+  
+  .country-path.visited:hover {
+    fill: var(--accent-hover);
+    filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.8));
+  }
+}
+
+/* Active state gives physical feedback on a tap or pen press */
+.country-path:active {
+  transform: scale(0.98);
+}
+
+/* Visited Countries glow using your accent variable */
+.country-path.visited {
+  fill: var(--accent); 
+}
+
+/* The floating tooltip */
+.map-tooltip {
+  position: absolute;
+  display: none;
+  background: rgba(10, 15, 26, 0.95);
+  color: var(--fg);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--primary);
+  /* Crucial: stops the tooltip from intercepting the pointer and causing flicker */
+  pointer-events: none; 
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 10;
+  box-shadow: var(--shadow-lg);
+  white-space: nowrap;
+  /* Hardware acceleration for smooth tracking on high refresh rate screens */
+  transform: translateZ(0); 
+  will-change: left, top;
+}
+
+/* --- Products Section --- */
+.products-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.product-card {
+  background: linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 12px;
+  padding: var(--space-8);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(59, 130, 246, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.product-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  transform: scaleX(0);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-card:hover::before {
+  transform: scaleX(1);
+}
+
+.product-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.product-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  gap: var(--space-4);
+}
+
+.product-header h3 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  flex: 1;
+}
+
+.status-badge {
+  flex-shrink: 0;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.status-badge.beta {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #22c55e;
+}
+
+.product-description {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin: 0 0 var(--space-6) 0;
+  letter-spacing: 0.2px;
+  flex-grow: 1;
+}
+
+.product-icon-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-8) 0;
+  margin-bottom: var(--space-6);
+}
+
+.product-icon {
+  font-size: 4rem;
+  color: var(--primary);
+  font-weight: 800;
+  filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3));
+  line-height: 1;
+}
+
+.product-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.btn-primary {
+  width: 100%;
+  text-align: center;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  color: white;
+  padding: var(--space-4) var(--space-6);
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 0.95rem;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  width: 100%;
+  text-align: center;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--muted);
+  padding: var(--space-4) var(--space-6);
+  font-weight: 700;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  font-size: 0.95rem;
+}
+
+.product-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+  letter-spacing: 0.15px;
+  opacity: 0.7;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 768px) {
+  .products-container {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  .product-card {
+    padding: var(--space-6);
+  }
+
+  .product-header h3 {
+    font-size: 1.25rem;
+  }
+
+  .product-icon {
+    font-size: 3.5rem;
+  }
+}
+
+  </style>
+<script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init zr Wr fi Br Gr ci Nr Hr capture Ui calculateEventProperties Kr register register_once register_for_session unregister unregister_for_session Zr getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Xr Jr createPersonProfile Qr jr ts opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing Vr debug O Yr getPageViewId captureTraceFeedback captureTraceMetric Or".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init('phc_zwPYErYkn4LDFAFjKfVX9dFDcXPL3r9BINjPN3tikrh', {
+        api_host: 'https://us.i.posthog.com',
+        defaults: '2025-11-30',
+        person_profiles: 'identified_only', // or 'always' to create profiles for anonymous users as well
+    })
+</script>
+</head>
+
+
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BFYPZHHMW3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-BFYPZHHMW3');
+</script>
+<body>
+
+  <header>
+    <h1>Francesco Salvatore</h1>
+    <p>Robotics · Automation · Engineering</p>
+    <em class="quote-text">Through endurance we conquer</em>
+  </header>
+
+  <nav>
+    <a href="#about">About</a>
+    <a href="#projects">Projects</a>
+    <a href="#previously">Previously</a>
+    <a href="#services">Services</a>
+    <a href="#products">Products</a>
+    <!--<a href="#travels">Travels</a>-->
+    <a href="#photos">Photos</a>
+    <a href="#travels">Travels</a>
+    <a href="#contact">Contact</a>
+  </nav>
+
+<section id="about">
+  <div class="about-content">
+    <div class="about-text">
+      <h2>About Me</h2>
+      <p>I'm a self taught full-stack developer and Mechanical Engineering student at TU/e in Eindhoven, with a strong focus on robotics, automation, and industrial systems. Over the past year I've built end-to-end projects ranging from PLC-based diagnostics tools in a factory setting, to web-integrated puzzle delivery systems for real users. Beyond engineering, I love to travel, hike and build things with smart people.</p>
+
+      <!-- 🔽 New Current Status button -->
+      <button class="btn status-btn" id="status-trigger">
+        🧭 Current status
+      </button>
+      <!-- 🔼 New Current Status button -->
+    </div>
+    <div class="about-image">
+      <img src="me.jpg" alt="Francesco Salvatore" class="profile-img">
+    </div>
+  </div>
+</section>
+
+<section id="projects" style="clear: both; margin-top: 40px;">
+<section id="projects">
+  <h2>Projects</h2>
+  <div class="card-container">
+
+
+
+    <div class="card">
+      <img src="photos/AutonomousRobot.jpeg" alt="Autonomous Robot">
+      <h3>Autonomous Robot Stacking</h3>
+      <p>Designed and implemented full-stack control algorithms for an autonomous robot, streamlining the entire masking, classification, and placement pipeline.</p>
+      <a href="https://github.com/franci-salv" target="_blank" class="btn">repo coming soon </a>
+    </div>
+    <div class="card">
+      <img src="teleopFranci.jpeg" alt="Teleoperated robotarm">
+      <h3>Teleoperated robot assembly</h3>
+      <p>Built a full-stack imitation learning robotics system using teleoperated SO-101 robot arms, trained with Hugging Face LeRobot for autonomous plant-health manipulation tasks.</p>
+      <a href="https://www.linkedin.com/posts/francesco-salvatore-982288239_greenhouses-spend-millions-every-year-fighting-activity-7460237524687552512-7gVB?utm_source=share&utm_medium=member_desktop&rcm=ACoAADtOq3IBMXdYpIZhu_0BAx7ANVXOMl-zNhA" target="_blank" class="btn">View Project</a>
+    </div>
+    <div class="card">
+      <img src="photos/RoboFootball.png" alt="Robot Football">
+      <h3>Sequential clustering algorithm </h3>
+      <p>Engineering a sequential clustering framework utilizing Bayesian filtering and hypothesis expansion to enable real-time data association and outlier pruning.</p>
+      <a href="https://github.com/franci-salv/" target="_blank" class="btn">In Development</a>
+    </div>
+
+    <div class="card">
+      <img src="diagnosticPics.jpeg" alt="Pringles Factory Diagnostics Tool">
+      <h3>Factory Diagnostics Tool</h3>
+      <p>Developed a IP and TCP package diagnostics tool for Device Level Ring (DLR) circuits at the Pringles factory, integrating Rockwell Studio 5000 with FactoryTalk HMI screens.</p>
+      <a href="Implementation_of_a_Network_Diagnostic_Toolkit_for_Pringles (1) (3).pdf" target="_blank" class="btn">View Project</a>
+    </div>
+    <div class="card">
+      <img src="photos/FPVDrone.webp" alt="FPV Drone ">
+      <h3>Drone Edge Computing </h3>
+      <p>Implemented and benchmarked a GAN-based neural network to deblur aerial footage, enhancing visual navigation for UAVs in GPS-denied environments.</p>
+      <a href="https://www.linkedin.com/posts/francesco-salvatore-982288239_robotics-computervision-drones-share-7449450556898598912-Bt0y?utm_source=share&utm_medium=member_desktop&rcm=ACoAADtOq3IBMXdYpIZhu_0BAx7ANVXOMl-zNhA" target="_blank" class="btn">View Project</a>
+    </div>
+    <div class="card">
+      <img src="whole robot.png" alt="AI image">
+      <h3>Stair climbing robot</h3>
+      <p>Built a robot to complete an obstacle course with stairs and bar clearance, using 3D printing, Arduino and laser cutting </p>
+      <a href="Group52FinalReport.pdf" target="_blank" class="btn">View Project</a>
+
+    </div>
+
+  </div>
+  <section id="projects" style="clear: both; margin-top: 40px;">
+<div class="buttons" style="text-align: center;">
+  <a href="https://drive.google.com/drive/folders/1Zwzm03u6CIWJyrZAe9PSzoY2q7IDPpTO?usp=sharing" 
+     target="_blank" class="btn">All projects</a>
+</div>
+
+</section>
+
+
+
+
+<section id="previously" class="bg-gray-50 py-16">
+  <h2 class="text-3xl font-bold text-center mb-10">Previously</h2>
+  
+  <!-- Timeline Container -->
+ <div class="timeline-container">
+   <div class="scroll-hint" id="timeline-hint"><span>Scroll</span><span class="chev">→</span></div>
+
+   <div class="timeline-card">
+      <h3>17/04/2026 – Eindhoven 🇳🇱</h3>
+      <p>Officially joined the 225 Club, by benching 100 kg on the bench twice. It has been a massive achievement at a weight of 75 kg and 7 years of training. It is cool to know that if a refrigerator fell on me in theory I'd have no trouble lifting it.</p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>12/04/2026 – Tilburg 🇳🇱</h3>
+      <p>Competed in my first hackathon by EDTH implemented an edge computing solution for UAV defense using PyTorch to using GAN tailored for real-time video deblurring and using CUDA for hardware-accelerated inference on the edge, resulting in a 25% increase in visual navigation accuracy on low-cost hardware within GPS-restricted environments.<a target="_blank" href="https://www.linkedin.com/feed/update/urn:li:activity:7449450558425534464/">See post</a></p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>12/10/2025 – Eindhoven 🇳🇱</h3>
+      <p>Running my first marathon, final placement #3759 final time of 4:31:20. I am incredibly proud of the journey I've embarked on. While training I was fundraising for The Ocean Cleanup.  <a target="_blank" href="https://fund.theoceancleanup.com/fundraisers/francescosalvatore/challenge-eur">Check it out</a></p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>07/09/2025 – Eindhoven 🇳🇱</h3>
+      <p>Joined Tech United robotics club in TU/e. I have been assigned to the development of a brand new local world model for humanoid swarm robotics, and co-developing the motion planning of the humanoid robots. In ROS2</p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>05/08/2025 – Gransee 🇩🇪</h3>
+      <p>With my dear friend <a target="_blank" href="https://thomasforbes.com/">Thomas</a> we signed up to get our first AFF skydiving jump. We arrived in Berlin bought a tent and emergency blankets (for warmth) and completed a 2 day training course and skydived for the first time.  <a target="_blank" href="https://www.instagram.com/p/DPBTT14jLDG/?igsh=azlhZW84bzh3YXg2">check out the Jumping video</a>   </p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>02/07-31/07 2025 – Mechelen 🇧🇪</h3>
+      <p>Internship at Pringles Factory (E&I), building diagnostics tools & PLC simulations. Created an IP diagnostics tool that checks all the ethernet cables in the factory for faulty ethernet connection by scanning all the IP packages sent through.</p>
+    </div>
+    <div class="timeline-card">
+      <h3>01/09/2024 – Eindhoven 🇳🇱</h3>
+      <p>Mechanical Engineering student at TU/e, diving into robotics & automation. Former member of Hajraa volleyball, now part of Tech united and Impact (kickboxing association)</p>
+    </div>
+    
+    <div class="timeline-card">
+      <h3>2024 – Dublin 🇮🇪</h3>
+      <p>Graduated Sutton Park School with a 625/625 receiving the certificate of excellence for highest national grade in DCG (Design communication graphics). Awarded best senior volleyball player, cultural student of the year and 4x volleyball national finalist in the 3 years of volleyball action. <a target="_blank" href="109404.pdf">Check out my grades here</a> </p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>2023 – Dublin 🇮🇪</h3>
+      <p>Started training with U20 irish national volleyball team. At the same time I was member of Ballymun Patriots Dogs team, referee and youth regional center team player. Coached and played with 2 current irish national team members</p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>2023 – Napoli/Roma 🇮🇹</h3>
+      <p>Interned with Ingegneria Falconio in Italy 🇮🇹, producing detailed CAD drawings of residential apartments. Used Fusion 360 to translate architectural concepts into precise technical models, and design communication</p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>2022 – Dublin 🇮🇪</h3>
+      <p>I followed and passed my first aid course, provided by sutton park school. To become an officially certified first aid responder!</p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>2020 – Dublin 🇮🇪</h3>
+      <p>Moved to Dublin started Sutton Park School and met some cool builders <a target="_blank" href="https://willcarkner.com/">Will</a> and <a target="_blank" href="https://thomasforbes.com/">Thomas</a> will probably build a company with them in the near future </p>
+    </div>
+
+  <div class="timeline-card">
+      <h3>2010 – Mol 🇧🇪</h3>
+      <p>Enrolled in the European School of Mol in Belgium, in Belgium I was a competitive gamer predominantly in Fortnite. Playing competitions for my dear friend Saarth. Additionally attended music school and played guitar for 5 years </p>
+    </div>
+
+    <div class="timeline-card">
+      <h3>31/05/2006 – Lier 🇧🇪</h3>
+      <p>A beautiful baby was born (me), very early hours in the morning just to annoy my mother. In <a target="_blank" href="https://www.google.com/maps/place/Heilig+Hartziekenhuis/@51.1316498,4.5553414,2757m/data=!3m1!1e3!4m6!3m5!1s0x47c3fc877f2ee497:0x22b2e1ce56677!8m2!3d51.1315663!4d4.5638389!16s%2Fg%2F1tzvvqpf?entry=ttu&g_ep=EgoyMDI1MTAwNi4wIKXMDSoASAFQAw%3D%3D">Heilig Hart ziekenhuis Lier</a>  </p>
+    </div>
+    
+  </div>
+</section>
+
+<section id="services" style="margin-top: 60px;">
+  <h2>Services</h2>
+  <p style="text-align:center; color:#778da9;">
+    Here’s how I can help your business, projects or you right now. Click a card to learn more.
+  </p>
+
+  <div class="service-container">
+
+    <div class="service-card">
+      <div class="card-header">
+        <div class="service-icon">🛠️</div>
+        <h3>CAD & Robotics</h3>
+      </div>
+      <div class="card-details">
+        <p>Turning sketches into buildable solutions and precision assemblies using advanced modeling and physical 3D prototyping.</p>
+        <div class="skillset-grid">
+          <div class="skill-card">SolidWorks</div>
+          <div class="skill-card">Siemens NX</div>
+          <div class="skill-card">Fusion 360</div>
+          <div class="skill-card">Onshape</div>
+          <div class="skill-card">SketchUp</div>
+          <div class="skill-card">Tech drawings</div>
+          <div class="skill-card">DFM</div>
+          <div class="skill-card">3D Printing</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="card-header">
+        <div class="service-icon">💻</div>
+        <h3>Full-Stack Dev</h3>
+      </div>
+      <div class="card-details">
+        <p>Building fast, reliable applications across web, embedded, and automation projects with modern tech stacks.</p>
+        <div class="skillset-grid">
+          <div class="skill-card">HTML, CSS</div>
+          <div class="skill-card">Python, C++, ROS</div>
+          <div class="skill-card">Matlab (+Simulink)</div>
+          <div class="skill-card">Git</div>
+          <div class="skill-card">Firebase</div>
+          <div class="skill-card">Stripe, Twilio</div>
+          <div class="skill-card">Render</div>
+          <div class="skill-card">Vercel</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="card-header">
+        <div class="service-icon">⚡</div>
+        <h3>Industrial Automation</h3>
+      </div>
+      <div class="card-details">
+        <p>Specializing in secure PLC programming, RDC integration, and IoT-ready HMI/SCADA systems for factory automation.</p>
+        <div class="skillset-grid">
+          <div class="skill-card">Allen-Bradley</div>
+          <div class="skill-card">Studio 5000</div>
+          <div class="skill-card">FactoryTalk</div>
+          <div class="skill-card">HMI / SCADA</div>
+          <div class="skill-card">DLR & Ethernet/IP</div>
+          <div class="skill-card">Ladder Logic</div>
+          <div class="skill-card">Structured Text</div>
+          <div class="skill-card">Device Integration</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="card-header">
+        <div class="service-icon">🎓</div>
+        <h3>Tutoring</h3>
+      </div>
+      <div class="card-details">
+        <p>Helping students understand faster and score higher. 625/625 in the Irish Leaving Cert + national DCG award.</p>
+        <div class="skillset-grid">
+          <div class="skill-card">Maths / Applied</div>
+          <div class="skill-card">DCG</div>
+          <div class="skill-card">Computer Science</div>
+          <div class="skill-card">Italian / Dutch</div>
+          <div class="skill-card">Exam Prep</div>
+          <div class="skill-card">Online / In-person</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Products Section - NEW -->
+<section id="products" style="margin-top: 60px;">
+  <h2>Products</h2>
+  <p style="text-align:center; color:#9ca3af; margin-bottom: var(--space-10);">
+    If you want to support me these products feel fair. I get some money I need for more projects and in return you get a cool fun product.
+  </p>
+
+  <div class="products-container">
+    <!-- Card 1: Daily Trivia Bot -->
+    <div class="product-card">
+      <div class="product-header">
+        <h3>Daily Trivia Telegram Bot</h3>
+        <span class="status-badge beta">Free Beta</span>
+      </div>
+      
+      <p class="product-description">
+        Get a dose of general trivia delivered straight to your Telegram every single day at 10:00 AM. While this will eventually become a premium paid experience, we are currently looking for passionate beta testers! Play for free, test your knowledge, and provide your feedback on how we can make it even better.
+      </p>
+
+      <div class="product-cta">
+        <a href="https://t.me/FrancescoSalva" target="_blank" class="btn btn-primary">
+          Join the Beta
+        </a>
+        <p class="product-hint">Message me on Telegram @FrancescoSalva</p>
+      </div>
+    </div>
+
+    <!-- Card 2: Coming Soon -->
+    <div class="product-card">
+      <div class="product-icon-wrapper">
+        <div class="product-icon">?</div>
+      </div>
+
+      <div class="product-header">
+        <h3>Coming Soon</h3>
+      </div>
+      
+      <p class="product-description">
+        We are cooking up something new. Stay tuned for our next product release.
+      </p>
+
+      <div class="product-cta">
+        <button class="btn btn-secondary" disabled>
+          Stay Tuned
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+  <!-- Work in progress 
+<section id="travels">
+  <h2>Travels</h2>
+  <div class="travel-slider-wrapper">    
+    <div class="travel-container">
+
+      
+
+      <div class="travel-card">
+        <div class="travel-content">
+          <div class="map-placeholder">
+            <img src="Interrailing.png" alt="Interrailing Map">
+          </div>
+          <h3>Interrailing Summer</h3>
+          <p class="travel-date">August 2025</p>
+          <p>Eindhoven → Berlin → Vienna → Prague → Budapest → Graz → Ljublijana → Sarajevo → Mostar → Podaca → Split</p>
+        </div>
+      </div>
+
+      <div class="travel-card">
+        <div class="travel-content">
+          <div class="map-placeholder">
+            <img src="Cycling trip.png" alt="Cycling Map">
+          </div>
+          <h3>Birthday Cycling Trip</h3>
+          <p class="travel-date">May 2025</p>
+          <p>Eindhoven → Maastricht → Aachen → Valkensburg</p>
+        </div>
+      </div>
+
+      <div class="travel-card">
+        <div class="travel-content">
+          <div class="map-placeholder">
+            <img src="PortugalClimb.png" alt="Portugal Map">
+          </div>
+          <h3>Portugal Mountain Climbing</h3>
+          <p class="travel-date">March 2025</p>
+          <p>Porto → Covilhã → Torre</p>
+        </div>
+      </div>
+
+      <div class="travel-card">
+        <div class="travel-content">
+          <div class="map-placeholder">
+            <img src="CanadaTrip.png" alt="Canada Map">
+          </div>
+          <h3>Canada Family Trip</h3>
+          <p class="travel-date">August 2024</p>
+          <p>Vancouver → Whistler → Kamloops → Salmon Arm → Golden → Canmore → Banff → Calgary</p>
+        </div>
+      </div>
+
+      <div class="travel-card">
+        <div class="travel-content">
+          <div class="map-placeholder">
+            <img src="ItalyTrip.png" alt="Italy Map">
+          </div>
+          <h3>Friends Italy Trip</h3>
+          <p class="travel-date">July 2024</p>
+          <p>Turin → Napoli → Capri → Cagliari</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+-->
+
+<section id="photos">
+  <h2>Photos</h2>
+  <p style="text-align:center; color:#9ca3af;">Snapshots from projects, travel, and moments I love.</p>
+
+  <div class="photo-gallery">
+    <img src="photos/marathon .jpg" alt="Me running marathon">
+    <img src="photos/humanoid.jpg" alt="Humanoid Tech United and me">
+    <img src="photos/me goofy suit.jpg" alt="Me in suit">
+    <img src="photos/me and volleyball.jpg" alt="Volleyball">
+    <img src="photos/me and tesoro.jpg" alt="Me and Girlfriend">
+    <img src="photos/boys.jpg" alt="Me and the boys">
+    <img src="photos/skydive.jpg" alt="Me skydiving">
+    <img src="photos/SolderingHobbyist.jpeg" alt="Me soldering">
+
+
+
+  </div>
+
+  <!-- Lightbox Overlay -->
+  <div id="lightbox" class="lightbox">
+    <span class="close">&times;</span>
+    <img class="lightbox-content" id="lightbox-img">
+  </div>
+
+  <details class="printing-hall-details">
+  <summary class="printing-hall-summary">🏗️ View 3D Printing Hall</summary>
+  <div class="printing-hall-content">
+    <p style="text-align:center; color:#9ca3af; margin-bottom: 2rem;">3D prints that made my life better and prototypes from my Bambu A1 (more coming soon).</p>
+    
+    <div class="photo-gallery">
+      <img src="photos/3DPrintHall/GorillaPhoneHolder.jpeg" alt="Phone holder gorilla">
+      <img src="photos/3DPrintHall/SoapBox.jpeg" alt="Soap box">
+      <img src="photos/3DPrintHall/CableSorting.jpeg" alt="Cable sorting">
+
+      </div>
+  </div>
+</details>
+
+</section>
+
+<section id="travels" style="margin-top: 60px;">
+  <h2>World Traveller</h2>
+  <p style="text-align:center; color:#9ca3af;">Countries I've travelled to</p>
+  <div class="map-container" style="position:relative;">
+    <div id="map-tooltip" class="map-tooltip"></div>
+    <svg id="world-map" class="world-map-svg" viewBox="0 0 1000 500"></svg>
+  </div>
+</section>
+
+  <section id="contact">
+  <h2>Contact</h2>
+  <div class="contact-container">
+    <!-- Contact Form -->
+    <div class="contact-form-wrapper">
+      <h3>Send me a message</h3>
+      <form id="contactForm" class="contact-form">
+        <div class="form-group">
+          <label for="email">Email *</label>
+          <input type="email" id="email" name="email" required placeholder="your.email@example.com">
+          <span class="form-help">So I can get back to you</span>
+        </div>
+
+        <div class="form-group">
+          <label for="topic">Topic *</label>
+          <select id="topic" name="topic" required>
+            <option value="">-- Select a topic --</option>
+            <option value="services">💼 My Services (Work Opportunity)</option>
+            <option value="hangout">🎯 Want to Hang Out / Collaborate</option>
+            <option value="question">❓ Question or Feedback</option>
+            <option value="opportunity">🚀 Interesting Opportunity</option>
+            <option value="other">📮 Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="message">Message *</label>
+          <textarea id="message" name="message" required placeholder="Tell me what's on your mind..." rows="6"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-submit" id="submitBtn">Send Message</button>
+        <div id="formStatus" class="form-status"></div>
+      </form>
+    </div>
+
+    <!-- Social Links -->
+    <div class="contact-social">
+      <h3>Or connect with me on</h3>
+      <div class="button-group">
+        <button class="btn" onclick="copyEmail()">Copy Email</button>
+        <a href="https://github.com/franci-salv" target="_blank" class="btn">GitHub</a>
+        <a href="https://www.linkedin.com/in/francesco-salvatore-982288239/" target="_blank" class="btn">LinkedIn</a>
+        <a href="Francesco_Resume.pdf" class="btn" download>Download CV</a>
+        <a href="https://ko-fi.com/francescosalvatore" target="_blank" class="btn">💖 Support My Work</a>
+        <a href="https://x.com/areyour28763721" target="_blank" class="btn">X/Twitter</a>
+        <a href="https://substack.com/@francescosblog?utm_campaign=profile&utm_medium=profile-page" target="_blank" class="btn">My blog</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- 🔼 Current Status Modal -->
+ <div id="status-modal" class="status-modal">
+  <div class="status-modal-content">
+    <span class="status-close">&times;</span>
+    <h3 id="status-title">Current Status</h3>
+    <p id="status-subtitle" class="status-subtitle">Quick snapshot of what I’m focused on right now.</p>
+    
+    <ul class="status-list" id="status-list-container"></ul>
+
+    <div class="status-nav">
+      <button id="prev-status" class="nav-btn">← Previously</button>
+      <button id="next-status" class="nav-btn">Next →</button>
+    </div>
+  </div>
+</div>
+
+
+  <footer>
+    <p>&copy; Francesco Salvatore</p>
+  </footer>
+
+
+  <script>
+
+  /* Contact Form Handler */
+  // Hardcoded for development - works from any IP/hostname
+  const API_URL = 'https://mysimplewebsite-production.railway.app/api/contact';
+  
+  const contactForm = document.getElementById('contactForm');
+  const formStatus = document.getElementById('formStatus');
+  const submitBtn = document.getElementById('submitBtn');
+
+  contactForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Validate form
+    if (!contactForm.checkValidity()) {
+      showStatus('Please fill in all required fields correctly', 'error');
+      return;
+    }
+
+    // Get form data
+    const formData = {
+      email: document.getElementById('email').value.trim(),
+      topic: document.getElementById('topic').value,
+      message: document.getElementById('message').value.trim()
+    };
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      showStatus('Please enter a valid email address', 'error');
+      return;
+    }
+
+    if (!formData.topic) {
+      showStatus('Please select a topic', 'error');
+      return;
+    }
+
+    if (formData.message.length < 10) {
+      showStatus('Message must be at least 10 characters long', 'error');
+      return;
+    }
+
+    // Disable submit button and show loading
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending...';
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        showStatus('✓ Message sent successfully! I\'ll get back to you soon.', 'success');
+        contactForm.reset();
+      } else {
+        const error = await response.json();
+        showStatus(error.message || 'Failed to send message. Please try again.', 'error');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      showStatus('Unable to send message. Please try again later or contact me directly.', 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send Message';
+    }
+  });
+
+  function showStatus(message, type) {
+    formStatus.textContent = message;
+    formStatus.className = `form-status ${type}`;
+    
+    // Auto-hide success message after 5 seconds
+    if (type === 'success') {
+      setTimeout(() => {
+        formStatus.className = 'form-status';
+        formStatus.textContent = '';
+      }, 5000);
+    }
+  }
+
+  /* Current Status Data - Add your history here! */
+const statusHistory = [
+  {
+    period: "Current Status",
+    subtitle: "Quick snapshot of what I’m focused on right now.",
+    items: [
+      { tag: "Robotics", body: "Developing a new object hypothesis expansion for sequential clustering algorithm in tech united" },
+      { tag: "Building", body: "Doing a soldering puzzle to learn to solder" },
+      { tag: "Travel", body: "Will be going to China in July this summer" },
+      { tag: "University", body: "Heat & Flow, Autonomous robotics and Digital twin (Unity)" },
+      { tag: "Startup Accelerator", body: "Attending workshops to learn sales, pitching and validate our vision"},
+      { tag: "Reading", body: "The forgotten highlander by Alistair Urquhart" },
+      { tag: "Work prospects", body: "I've been offered an internship more info soon" },
+    ]
+  },
+  {
+    period: "Early 2026",
+    subtitle: "Exciting start of the year",
+    items: [
+      { tag: "Robotics", body: "Developing a hypothesis expansion for noise within the sequential clustering algorithmin tech united" },
+      { tag: "Building", body: "Built teleoperating robot arm SO-101 robot with trained with imitation learning" },
+      { tag: "Travel", body: "Travelled to Switzerland, Austria and Romania!" },
+      { tag: "University", body: "Dynamics for Robotics systems, Solid Mechanics and Controlling a robotic arm MATLAB" },
+      { tag: "Training", body: "Training in kickboxing at Impact Eindhoven" },
+      { tag: "Reading", body: "Your inner fish by Neil Shubin" },
+      { tag: "Hit song", body: "I RUN, Haven & Kaitlin Aragon" }
+    ]
+  },
+  {
+    period: "Late 2025",
+    subtitle: "What I was working on",
+    items: [
+      { tag: "Robotics", body: "Built my own basic Kalman filter from scratch to learn about C++" },
+      { tag: "Building", body: "Finished the first prototype of this website" },
+      { tag: "Travel", body: "Went interrailing across the balkans" },
+      { tag: "University", body: "Dynamics and control systems, Astrophysics and engine fuel simulations" },      
+      { tag: "Training", body: "Training for my marathon in Eindhoven" },
+      { tag: "Reading", body: "3 body problem, Death's End Liu Cixin" },
+      { tag: "Hit song", body: "I like it, Alesso & Nate Smith" }
+
+    ]
+  },
+
+  {
+    period: "Summer 2025",
+    subtitle: "What I was working on",
+    items: [
+      { tag: "Building", body: "Building my Whatsapp puzzle delivery service" },
+      { tag: "Internship", body: "Making a IP diagnostics tool for Pringles factory" },
+      { tag: "Travel", body: "Went on a cycling trip NL -> BE -> DE" },
+      { tag: "University", body: "Signals and systems, Material properties, simulate heat energy storage system" },      
+      { tag: "Training", body: "Training for my marathon in Eindhoven" },
+      { tag: "Reading", body: "Steve Jobs, by Walter Isaacson" },
+
+    ]
+  },
+
+  {
+    period: "Early 2025",
+    subtitle: "What I was working on",
+    items: [
+      { tag: "Building", body: "Weather cycling recommendation website" },
+      { tag: "Travel", body: "Went to Portugal to climb the highest mountain in the mainland" },
+      { tag: "University", body: "Dynamics, Transport phenomena, stair climbing robotics competition" },      
+      { tag: "Training", body: "Training for my 5km race aiming for <20 mins " },
+      { tag: "Reading", body: "The 33 laws of business and life, by Steven Bartlett" },
+
+    ]
+  }
+];
+
+let currentStageIndex = 0;
+
+const statusTrigger = document.getElementById('status-trigger');
+const statusModal = document.getElementById('status-modal');
+const statusClose = document.querySelector('.status-close');
+const listContainer = document.getElementById('status-list-container');
+const statusTitle = document.getElementById('status-title');
+const statusSubtitle = document.getElementById('status-subtitle');
+const prevBtn = document.getElementById('prev-status');
+const nextBtn = document.getElementById('next-status');
+
+function updateStatusModal(index) {
+  const data = statusHistory[index];
+  
+  // Update Header
+  statusTitle.innerText = data.period;
+  statusSubtitle.innerText = data.subtitle;
+  
+  // Clear and rebuild list
+  listContainer.innerHTML = '';
+  data.items.forEach(item => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="status-tag">${item.tag}</span>
+      <div class="status-body">${item.body}</div>
+    `;
+    listContainer.appendChild(li);
+  });
+
+  // Handle Button States
+  prevBtn.disabled = index === statusHistory.length - 1;
+  nextBtn.disabled = index === 0;
+}
+
+// Event Listeners
+if (statusTrigger && statusModal) {
+  statusTrigger.addEventListener('click', () => {
+    currentStageIndex = 0; // Reset to current when opening
+    updateStatusModal(currentStageIndex);
+    statusModal.style.display = 'flex';
+  });
+
+  statusClose.addEventListener('click', () => statusModal.style.display = 'none');
+  
+  prevBtn.addEventListener('click', () => {
+    if (currentStageIndex < statusHistory.length - 1) {
+      currentStageIndex++;
+      updateStatusModal(currentStageIndex);
+    }
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (currentStageIndex > 0) {
+      currentStageIndex--;
+      updateStatusModal(currentStageIndex);
+    }
+  });
+
+  // Close on outside click
+  statusModal.addEventListener('click', (e) => {
+    if (e.target === statusModal) statusModal.style.display = 'none';
+  });
+}
+
+
+</script>
+
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const cards = document.querySelectorAll('.service-card');
+
+    cards.forEach(card => {
+      card.addEventListener('click', () => {
+        // Optional: Close other cards when one is clicked
+        cards.forEach(c => {
+          if (c !== card) c.classList.remove('active');
+        });
+        
+        // Toggle the clicked card
+        card.classList.toggle('active');
+      });
+    });
+  });
+
+  // 2. Timeline scroll hint logic
+  const timeline = document.querySelector('.timeline-container');
+  const hint = document.getElementById('timeline-hint');
+  
+  function updateHintVisibility() {
+    if (!timeline || !hint) return;
+    const atEnd = Math.ceil(timeline.scrollLeft + timeline.clientWidth) >= timeline.scrollWidth;
+    const atStart = timeline.scrollLeft <= 2;
+    if (timeline.scrollWidth <= timeline.clientWidth || !atStart) {
+      hint.classList.add('hide');
+    } else {
+      hint.classList.remove('hide');
+    }
+  }
+
+  if (timeline && hint) {
+    updateHintVisibility();
+    timeline.addEventListener('scroll', updateHintVisibility, { passive: true });
+    window.addEventListener('resize', updateHintVisibility);
+    timeline.addEventListener('pointerdown', () => hint.classList.add('hide'), { once: true });
+    timeline.addEventListener('wheel', () => hint.classList.add('hide'), { once: true });
+    setTimeout(() => hint.classList.add('hide'), 5000);
+  }
+
+  // 3. Email Copy Function
+  function copyEmail() {
+    // Note: This requires a secure origin (HTTPS) to work in most browsers
+    navigator.clipboard.writeText("francisalv@icloud.com").then(() => {
+    alert("Email copied!");
+    }).catch(err => {
+      console.error('Failed to copy: ', err);
+    });
+  }
+
+  // 4. Lightbox functionality
+  const gallery = document.querySelectorAll('.photo-gallery img');
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
+  const closeBtn = document.querySelector('.lightbox-close'); // Changed to be more specific
+
+  if (lightbox && lightboxImg) {
+    gallery.forEach(img => {
+      img.addEventListener('click', () => {
+        lightbox.style.display = 'block';
+        lightboxImg.src = img.src;
+      });
+    });
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        lightbox.style.display = 'none';
+      });
+    }
+
+    // Safer way to handle background clicks
+    window.addEventListener('click', (event) => {
+      if (event.target === lightbox) {
+        lightbox.style.display = 'none';
+      }
+    });
+  }
+
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const width = 1000, height = 500;
+    const tooltip = document.getElementById('map-tooltip');
+    const container = document.querySelector('.map-container');
+
+    // Numeric ISO 3166-1 codes
+    const travelLog = {
+      '124': 'Canada — Family trip, August 2024',
+      '380': 'Italy — Turin, Napoli, Capri, July 2024',
+      '642': 'Romania — Iasi with my girlfriend Mar 2026',
+      '840': 'USA — New York with my parents Nov 2023',
+      '250': 'France — Paris for new years Jan 2025',
+      '336': 'the Vatican — visiting unc ',
+      '203': 'Czech Republic — Interrailing 2025',
+      '348': 'Hungary — Interrailing 2025',
+      '705': 'Slovenia — Interrailing 2025',
+      '70': 'Bosnia and Herzegovina — Interrailing 2025',
+      '191': 'Croatia — Interrailing 2025',
+      '352': 'Iceland — Family trip',
+      '578': 'Norway — Family trip',
+      '40': 'Austria — Valentines trip Feb 2026',
+      '724': 'Spain — School Trip in Madrid 2023',
+      '372': 'Ireland  — Lived here 2020–2024',
+      '56':  'Belgium  — Born & raised here 2006-2020',
+      '528': 'Netherlands  — TU/e, marathons & more',
+      '276': 'Germany  — Skydiving, August 2025',
+      '620': 'Portugal  — Mountain climbing, March 2025',
+      '826': 'UK  — visited Canterbury School trip, 2018',
+      '756': 'Switzerland  — hackathon @ EPFL Robohack, 2026 '
+    };
+
+    const svg = d3.select('#world-map')
+      .attr('viewBox', `0 0 ${width} ${height}`);
+
+    const projection = d3.geoNaturalEarth1()
+      .scale(153)
+      .translate([width / 2, height / 2]);
+
+    const pathGen = d3.geoPath().projection(projection);
+
+    fetch('countries-110m.json')
+      .then(r => r.json())
+      .then(world => {
+        const countries = topojson.feature(world, world.objects.countries);
+
+        svg.selectAll('path')
+          .data(countries.features)
+          .enter().append('path')
+          .attr('class', d => {
+            const id = String(+d.id); // strips leading zeros e.g. "056" → "56"
+            return 'country-path' + (travelLog[id] ? ' visited' : '');
+          })
+          .attr('d', pathGen)
+          .on('pointerenter', function(event, d) {
+            const note = travelLog[String(+d.id)];
+            if (!note) return;
+            tooltip.textContent = note;
+            tooltip.style.display = 'block';
+          })
+          .on('pointermove', function(event) {
+            const rect = container.getBoundingClientRect();
+            tooltip.style.left  = (event.clientX - rect.left) + 'px';
+            tooltip.style.top   = (event.clientY - rect.top - 44) + 'px';
+            tooltip.style.transform = 'translate(-50%, 0)';
+          })
+          .on('pointerleave', function() {
+            tooltip.style.display = 'none';
+          });
+      })
+      .catch(() => {
+        document.querySelector('.map-container').innerHTML = 
+          '<p style="text-align:center;color:var(--muted);padding:2rem;">Map failed to load — check your internet connection.</p>';
+      });
+  });
+</script>
+
+</body>
+</html>

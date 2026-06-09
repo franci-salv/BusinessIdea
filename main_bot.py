@@ -38,6 +38,8 @@ Path(os.path.dirname(DB_PATH)).mkdir(parents=True, exist_ok=True)
 
 # Track processed polls to avoid duplicates
 processed_polls = set()
+# Map (user_id, poll_id) -> question index for the poll that was sent
+poll_question_map = {}
 
 ENCOURAGEMENTS = [
     "🎉 Fantastic! You got it!",
@@ -60,6 +62,15 @@ WRONG_MESSAGES = [
     "❌ That's incorrect. No worries!"
 ]
 
+def _table_columns(conn, table):
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def _add_column_if_missing(conn, table, column, definition):
+    if column not in _table_columns(conn, table):
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 class UserDB:
     def __init__(self, db_path):
         self.db_path = db_path
@@ -78,15 +89,8 @@ class UserDB:
                 )
             """)
             
-            # Add missing columns if they don't exist
-            try:
-                conn.execute("ALTER TABLE users ADD COLUMN quiz_progress INTEGER DEFAULT 0")
-            except:
-                pass
-            try:
-                conn.execute("ALTER TABLE users ADD COLUMN today_quiz_date TEXT")
-            except:
-                pass
+            _add_column_if_missing(conn, "users", "quiz_progress", "INTEGER DEFAULT 0")
+            _add_column_if_missing(conn, "users", "today_quiz_date", "TEXT")
             
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS quiz_responses (
@@ -99,6 +103,11 @@ class UserDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # Migrate legacy schema from core/telegram_bot.py
+            _add_column_if_missing(conn, "quiz_responses", "poll_id", "INTEGER")
+            _add_column_if_missing(conn, "quiz_responses", "answer_index", "INTEGER")
+            _add_column_if_missing(conn, "quiz_responses", "question_number", "INTEGER")
+            _add_column_if_missing(conn, "quiz_responses", "answer_text", "TEXT")
             conn.commit()
     
     def add_user(self, user_id, username):
@@ -129,21 +138,34 @@ class UserDB:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute(
-                    "UPDATE users SET quiz_progress = ?, today_quiz_date = ? WHERE user_id = ?",
-                    (progress, quiz_date, user_id)
+                    """INSERT INTO users (user_id, quiz_progress, today_quiz_date)
+                       VALUES (?, ?, ?)
+                       ON CONFLICT(user_id) DO UPDATE SET
+                       quiz_progress = excluded.quiz_progress,
+                       today_quiz_date = excluded.today_quiz_date""",
+                    (user_id, progress, quiz_date)
                 )
                 conn.commit()
         except Exception as e:
             logger.error(f"Error setting progress: {e}")
     
-    def record_answer(self, user_id, quiz_date, question_num, answer, is_correct):
+    def record_answer(self, user_id, quiz_date, question_num, answer, is_correct, poll_id=None, option_id=None):
         try:
             with sqlite3.connect(self.db_path) as conn:
-                conn.execute(
-                    "INSERT INTO quiz_responses (user_id, quiz_date, question_number, answer_text, is_correct) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (user_id, quiz_date, question_num, answer, is_correct)
-                )
+                cols = _table_columns(conn, "quiz_responses")
+                if "question_number" in cols and "answer_text" in cols:
+                    conn.execute(
+                        "INSERT INTO quiz_responses "
+                        "(user_id, quiz_date, question_number, answer_text, is_correct, poll_id, answer_index) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (user_id, quiz_date, question_num, answer, is_correct, poll_id, option_id)
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO quiz_responses (user_id, quiz_date, poll_id, answer_index, is_correct) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (user_id, quiz_date, poll_id or 0, option_id or 0, is_correct)
+                    )
                 conn.commit()
         except Exception as e:
             logger.error(f"Error recording answer: {e}")
@@ -169,7 +191,7 @@ def send_message(chat_id, text):
         logger.error(f"Error sending message: {e}")
 
 def send_poll(chat_id, question, options, correct_option_id):
-    """Send a poll"""
+    """Send a poll. Returns Telegram poll id on success."""
     data = {
         "chat_id": chat_id,
         "question": question,
@@ -180,9 +202,14 @@ def send_poll(chat_id, question, options, correct_option_id):
         "explanation": f"✅ The correct answer is: **{options[correct_option_id]}**"
     }
     try:
-        requests.post(f"{API_URL}/sendPoll", json=data, timeout=10)
+        response = requests.post(f"{API_URL}/sendPoll", json=data, timeout=10)
+        result = response.json()
+        if result.get("ok"):
+            return result["result"]["poll"]["id"]
+        logger.error(f"sendPoll failed: {result}")
     except Exception as e:
         logger.error(f"Error sending poll: {e}")
+    return None
 
 def handle_start(chat_id, user_id):
     """Handle /start command"""
@@ -225,6 +252,7 @@ def handle_callback(query_id, chat_id, user_id, data):
 
 def start_quiz(chat_id, user_id):
     """Start or resume quiz"""
+    user_db.add_user(user_id, "")
     quiz = load_quiz()
     if not quiz or not quiz.get("questions"):
         send_message(chat_id, "❌ No quiz available today. Try again later!")
@@ -242,7 +270,8 @@ def start_quiz(chat_id, user_id):
         send_message(chat_id, "🎉 You've completed today's quiz! Come back tomorrow for new questions.")
         return
     
-    send_message(chat_id, f"📚 **{quiz.get('title', 'Daily Quiz')}**\n\nQuestion {progress + 1}/10")
+    total = len(quiz["questions"])
+    send_message(chat_id, f"📚 **{quiz.get('title', 'Daily Quiz')}**\n\nQuestion {progress + 1}/{total}")
     send_next_question(chat_id, user_id, quiz, progress)
 
 def send_next_question(chat_id, user_id, quiz, question_index):
@@ -255,12 +284,14 @@ def send_next_question(chat_id, user_id, quiz, question_index):
     options = q["options"]
     correct_idx = options.index(q["correct_answer"])
     
-    send_poll(
+    poll_id = send_poll(
         chat_id,
         f"Q{question_index + 1}: {q['question']}",
         options,
         correct_idx
     )
+    if poll_id is not None:
+        poll_question_map[(user_id, poll_id)] = question_index
 
 def handle_poll_answer(user_id, poll_id, option_id):
     """Handle poll answer and send next question"""
@@ -273,6 +304,7 @@ def handle_poll_answer(user_id, poll_id, option_id):
         return
     
     processed_polls.add(poll_key)
+    user_db.add_user(user_id, "")
     
     quiz = load_quiz()
     if not quiz:
@@ -286,18 +318,28 @@ def handle_poll_answer(user_id, poll_id, option_id):
         progress = 0
         user_db.set_user_progress(user_id, 0, today)
     
-    if progress >= len(quiz["questions"]):
+    poll_key_map = (user_id, poll_id)
+    if poll_key_map in poll_question_map:
+        question_index = poll_question_map.pop(poll_key_map)
+    else:
+        question_index = progress
+        logger.warning(
+            f"Poll {poll_id} not tracked for user {user_id}, using DB progress {progress}"
+        )
+    
+    if question_index >= len(quiz["questions"]):
         send_message(user_id, "🏆 All done! You already completed today's quiz!")
         return
     
-    # Get current question
-    q = quiz["questions"][progress]
-    correct_idx = q["options"].index(q["correct_answer"])
+    # Reject answers to polls from an earlier question in today's quiz
+    if question_index < progress:
+        logger.info(f"Ignoring stale poll answer: Q{question_index + 1} (progress is Q{progress + 1})")
+        return
     
-    # Check if answer was correct
+    q = quiz["questions"][question_index]
+    correct_idx = q["options"].index(q["correct_answer"])
     was_correct = (option_id == correct_idx)
     
-    # Send feedback
     if was_correct:
         import random
         msg = random.choice(ENCOURAGEMENTS)
@@ -308,20 +350,21 @@ def handle_poll_answer(user_id, poll_id, option_id):
         correct_answer = q["correct_answer"]
         send_message(user_id, f"{msg}\n\n💡 The correct answer was: **{correct_answer}**")
     
-    # Record answer
-    user_db.record_answer(user_id, today, progress + 1, q["options"][option_id], was_correct)
+    user_db.record_answer(
+        user_id, today, question_index + 1, q["options"][option_id], was_correct,
+        poll_id=poll_id, option_id=option_id
+    )
     
-    # Move to next question
-    progress += 1
+    progress = question_index + 1
     user_db.set_user_progress(user_id, progress, today)
     
     time.sleep(0.5)
     
-    if progress >= len(quiz["questions"]):
-        send_message(user_id, "🏆 Awesome! You completed all 10 questions today! 🎉")
+    total = len(quiz["questions"])
+    if progress >= total:
+        send_message(user_id, f"🏆 Awesome! You completed all {total} questions today! 🎉")
         return
     
-    # Send next question
     logger.info(f"➡️ Sending Q{progress + 1} to user {user_id}")
     send_next_question(user_id, user_id, quiz, progress)
 
@@ -368,8 +411,12 @@ def show_stats(chat_id, user_id):
         logger.error(f"Error fetching stats: {e}")
         correct, total = 0, 0
     
+    wrong = total - correct
     percentage = int((correct / total * 100)) if total > 0 else 0
-    send_message(chat_id, f"📊 **Your Stats**\n\n✅ Correct: {correct}\n❌ Total: {total}\n📈 Accuracy: {percentage}%")
+    send_message(
+        chat_id,
+        f"📊 **Your Stats**\n\n✅ Correct: {correct}\n❌ Wrong: {wrong}\n📝 Answered: {total}\n📈 Accuracy: {percentage}%"
+    )
 
 def get_updates(offset=0):
     """Get updates from Telegram"""

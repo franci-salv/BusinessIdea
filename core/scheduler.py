@@ -41,7 +41,7 @@ def scrape_daily_quiz():
         logger.error(f"[SCHEDULER] Error running scraper: {e}")
 
 def broadcast_daily_quiz():
-    """Send 'quiz time' message to all subscribed users"""
+    """Send daily quiz announcement + button to all subscribed users at 10:00 AM"""
     logger.info("📢 [SCHEDULER] Broadcasting daily quiz at 10:00 AM...")
     
     try:
@@ -56,23 +56,13 @@ def broadcast_daily_quiz():
     
     for user_id in users:
         try:
-            # Send wake-up message
             requests.post(f"{API_URL}/sendMessage", json={
                 "chat_id": user_id,
-                "text": "🎉 Good morning! Today's puzzle is ready! 📚",
-            }, timeout=10)
-            
-            time.sleep(0.2)
-            
-            # Send quiz button
-            requests.post(f"{API_URL}/sendMessage", json={
-                "chat_id": user_id,
-                "text": "Ready?",
+                "text": "🎉 Good morning! Today's puzzle is ready!\n\n📚 Press the button below to start:",
                 "reply_markup": {
-                    "inline_keyboard": [[{"text": "📚 Start Quiz", "callback_data": "start_quiz"}]]
+                    "inline_keyboard": [[{"text": "🚀 Start Quiz Now", "callback_data": "start_quiz"}]]
                 }
             }, timeout=10)
-            
             time.sleep(0.3)
         except Exception as e:
             logger.error(f"[SCHEDULER] Error sending to user {user_id}: {e}")

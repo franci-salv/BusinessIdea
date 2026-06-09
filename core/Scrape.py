@@ -40,11 +40,16 @@ for q in quiz_data["questions"]:
     })
 
 # STEP 4: Save as JSON
-with open("daily_quiz.json", "w", encoding="utf-8") as f:
+import os
+output_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+os.makedirs(output_dir, exist_ok=True)
+output_path = os.path.join(output_dir, "daily_quiz.json")
+
+with open(output_path, "w", encoding="utf-8") as f:
     json.dump(output, f, indent=2, ensure_ascii=False)
 
-print(f"✅ Fetched quiz: {quiz_title} ({quiz_date}) with {len(output['questions'])} questions.")
-print(output)
+print(f"OK: Fetched quiz - {quiz_title} ({quiz_date}) with {len(output['questions'])} questions.")
+print(f"Saved to: {output_path}")
 
 
 

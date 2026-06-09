@@ -176,11 +176,71 @@ class UserDB:
 
 def load_quiz():
     try:
+        if not os.path.exists(QUIZ_PATH):
+            logger.warning(f"Quiz file not found at: {QUIZ_PATH}. Fetching fresh quiz...")
+            fetch_and_save_quiz()
+        
+        if not os.path.exists(QUIZ_PATH):
+            logger.error(f"Failed to fetch quiz. File still missing at: {QUIZ_PATH}")
+            return None
+            
         with open(QUIZ_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading quiz: {e}")
+            quiz = json.load(f)
+            if not quiz.get("questions"):
+                logger.error("Quiz file is empty or has no questions")
+                return None
+            logger.info(f"Loaded quiz: {quiz['title']} ({len(quiz['questions'])} questions)")
+            return quiz
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in quiz file: {e}")
         return None
+    except Exception as e:
+        logger.error(f"Error loading quiz from {QUIZ_PATH}: {e}")
+        return None
+
+def fetch_and_save_quiz():
+    """Fetch quiz from API and save locally"""
+    try:
+        logger.info("Fetching quiz from API...")
+        headers = {"User-Agent": "Mozilla/5.0"}
+        
+        quiz_list_url = "https://quizoftheday.co.uk/api/quizzes"
+        res = requests.get(quiz_list_url, headers=headers, timeout=10)
+        quiz_list = res.json()
+        
+        latest_quiz = quiz_list["quizzes"][0]
+        quiz_id = latest_quiz["id"]
+        quiz_title = latest_quiz["name"]
+        quiz_date = latest_quiz["quizDate"]
+        
+        quiz_url = f"https://quizoftheday.co.uk/api/quiz/{quiz_id}"
+        res = requests.get(quiz_url, headers=headers, timeout=10)
+        quiz_data = res.json()["quiz"]
+        
+        output = {
+            "title": quiz_title,
+            "date": quiz_date,
+            "questions": []
+        }
+        
+        for q in quiz_data["questions"]:
+            question_text = q["text"]
+            options = [a["text"] for a in q["answers"]]
+            correct_answer = next(a["text"] for a in q["answers"] if a["correct"])
+            
+            output["questions"].append({
+                "question": question_text,
+                "options": options,
+                "correct_answer": correct_answer
+            })
+        
+        os.makedirs(os.path.dirname(QUIZ_PATH), exist_ok=True)
+        with open(QUIZ_PATH, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Fetched and saved quiz: {quiz_title} ({len(output['questions'])} questions)")
+    except Exception as e:
+        logger.error(f"Error fetching quiz from API: {e}")
 
 def send_message(chat_id, text):
     """Send a text message"""

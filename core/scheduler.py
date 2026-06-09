@@ -23,6 +23,10 @@ API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "users.db")
 SCRAPER_PATH = os.path.join(os.path.dirname(__file__), "..", "core", "Scrape.py")
 
+if os.getenv("RENDER"):
+    DB_PATH = "/app/data/users.db"
+    SCRAPER_PATH = "/app/core/Scrape.py"
+
 logger = logging.getLogger(__name__)
 TIMEZONE = pytz.timezone("Europe/Amsterdam")
 

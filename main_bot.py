@@ -31,6 +31,10 @@ if not BOT_TOKEN:
 
 QUIZ_PATH = os.path.join(os.path.dirname(__file__), "data", "daily_quiz.json")
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "users.db")
+
+if os.getenv("RENDER"):
+    QUIZ_PATH = "/app/data/daily_quiz.json"
+    DB_PATH = "/app/data/users.db"
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # Ensure data directory exists

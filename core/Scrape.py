@@ -45,6 +45,9 @@ output_dir = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, "daily_quiz.json")
 
+if os.getenv("RENDER"):
+    output_path = "/app/data/daily_quiz.json"
+
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(output, f, indent=2, ensure_ascii=False)
 

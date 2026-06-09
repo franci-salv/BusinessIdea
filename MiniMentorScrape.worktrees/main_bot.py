@@ -612,10 +612,15 @@ def show_leaderboard(chat_id, user_id):
 def get_updates(offset=0):
     """Get updates from Telegram"""
     try:
+        logger.info(f"📡 [GET_UPDATES] Polling with offset {offset}...")
         response = requests.get(f"{API_URL}/getUpdates", params={"offset": offset, "timeout": 30}, timeout=35)
-        return response.json().get("result", [])
+        logger.info(f"📡 [GET_UPDATES] Got HTTP {response.status_code}")
+        result = response.json()
+        updates = result.get("result", [])
+        logger.info(f"📡 [GET_UPDATES] Returned {len(updates)} updates")
+        return updates
     except Exception as e:
-        logger.error(f"Error getting updates: {e}")
+        logger.error(f"❌ [GET_UPDATES] Exception during polling: {e}", exc_info=True)
         return []
 
 def main():
@@ -630,53 +635,64 @@ def main():
     
     try:
         while True:
-            updates = get_updates(offset)
+            try:
+                updates = get_updates(offset)
+                
+                if updates:
+                    logger.info(f"📬 Got {len(updates)} update(s)")
+                
+                for update in updates:
+                    try:
+                        update_count += 1
+                        offset = update["update_id"] + 1
+                        
+                        # Log all updates
+                        update_type = "UNKNOWN"
+                        if "message" in update:
+                            update_type = "MESSAGE"
+                        elif "callback_query" in update:
+                            update_type = "CALLBACK"
+                        elif "poll_answer" in update:
+                            update_type = "POLL_ANSWER"
+                        else:
+                            update_type = f"OTHER: {list(update.keys())}"
+                        
+                        logger.info(f"🔹 Update #{update_count}: {update_type}")
+                        
+                        # Handle messages
+                        if "message" in update:
+                            msg = update["message"]
+                            if msg.get("text") == "/start":
+                                user_id = msg["from"]["id"]
+                                username = msg["from"].get("username", "user")
+                                user_db.add_user(user_id, username)
+                                handle_start(msg["chat"]["id"], user_id)
+                        
+                        # Handle button clicks
+                        elif "callback_query" in update:
+                            query = update["callback_query"]
+                            user_id = query["from"]["id"]
+                            username = query["from"].get("username", "user")
+                            user_db.add_user(user_id, username)
+                            handle_callback(query["id"], query["message"]["chat"]["id"], user_id, query["data"])
+                        
+                        # Handle poll answers (auto-send next question)
+                        elif "poll_answer" in update:
+                            poll_answer = update["poll_answer"]
+                            user_id = poll_answer["user"]["id"]
+                            poll_id = poll_answer["poll_id"]
+                            option_id = poll_answer["option_ids"][0] if poll_answer.get("option_ids") else 0
+                            logger.info(f"✅ User {user_id} answered option {option_id} in poll {poll_id}")
+                            handle_poll_answer(user_id, poll_id, option_id)
+                    
+                    except Exception as e:
+                        logger.error(f"❌ Exception processing update #{update_count}: {e}", exc_info=True)
+                        continue
             
-            if updates:
-                logger.info(f"📬 Got {len(updates)} update(s)")
-            
-            for update in updates:
-                update_count += 1
-                offset = update["update_id"] + 1
-                
-                # Log all updates
-                update_type = "UNKNOWN"
-                if "message" in update:
-                    update_type = "MESSAGE"
-                elif "callback_query" in update:
-                    update_type = "CALLBACK"
-                elif "poll_answer" in update:
-                    update_type = "POLL_ANSWER"
-                else:
-                    update_type = f"OTHER: {list(update.keys())}"
-                
-                logger.info(f"🔹 Update #{update_count}: {update_type}")
-                
-                # Handle messages
-                if "message" in update:
-                    msg = update["message"]
-                    if msg.get("text") == "/start":
-                        user_id = msg["from"]["id"]
-                        username = msg["from"].get("username", "user")
-                        user_db.add_user(user_id, username)
-                        handle_start(msg["chat"]["id"], user_id)
-                
-                # Handle button clicks
-                elif "callback_query" in update:
-                    query = update["callback_query"]
-                    user_id = query["from"]["id"]
-                    username = query["from"].get("username", "user")
-                    user_db.add_user(user_id, username)
-                    handle_callback(query["id"], query["message"]["chat"]["id"], user_id, query["data"])
-                
-                # Handle poll answers (auto-send next question)
-                elif "poll_answer" in update:
-                    poll_answer = update["poll_answer"]
-                    user_id = poll_answer["user"]["id"]
-                    poll_id = poll_answer["poll_id"]
-                    option_id = poll_answer["option_ids"][0] if poll_answer.get("option_ids") else 0
-                    logger.info(f"✅ User {user_id} answered option {option_id} in poll {poll_id}")
-                    handle_poll_answer(user_id, poll_id, option_id)
+            except Exception as e:
+                logger.error(f"❌ CRITICAL ERROR in polling loop: {e}", exc_info=True)
+                import time
+                time.sleep(5)  # Wait 5 seconds before retrying
     
     except KeyboardInterrupt:
         logger.info("👋 Bot stopped")

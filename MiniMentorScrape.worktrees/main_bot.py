@@ -626,13 +626,31 @@ def main():
     logger.info("🤖 Bot is polling... Press Ctrl+C to stop")
     
     offset = 0
+    update_count = 0
     
     try:
         while True:
             updates = get_updates(offset)
             
+            if updates:
+                logger.info(f"📬 Got {len(updates)} update(s)")
+            
             for update in updates:
+                update_count += 1
                 offset = update["update_id"] + 1
+                
+                # Log all updates
+                update_type = "UNKNOWN"
+                if "message" in update:
+                    update_type = "MESSAGE"
+                elif "callback_query" in update:
+                    update_type = "CALLBACK"
+                elif "poll_answer" in update:
+                    update_type = "POLL_ANSWER"
+                else:
+                    update_type = f"OTHER: {list(update.keys())}"
+                
+                logger.info(f"🔹 Update #{update_count}: {update_type}")
                 
                 # Handle messages
                 if "message" in update:

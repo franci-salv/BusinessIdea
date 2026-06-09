@@ -2,6 +2,7 @@
 """
 Scheduler for daily quiz delivery at 10:00 AM
 Scrapes quiz at 9:55 AM, sends at 10:00 AM
+Uses Europe/Amsterdam timezone (UTC+2 in summer, UTC+1 in winter)
 """
 
 import os
@@ -14,6 +15,7 @@ from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import requests
+import pytz
 
 load_dotenv()
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -22,6 +24,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "users.db")
 SCRAPER_PATH = os.path.join(os.path.dirname(__file__), "..", "core", "Scrape.py")
 
 logger = logging.getLogger(__name__)
+TIMEZONE = pytz.timezone("Europe/Amsterdam")
 
 def scrape_daily_quiz():
     """Run the scraper to fetch today's quiz"""
@@ -70,28 +73,29 @@ def broadcast_daily_quiz():
     logger.info(f"✅ [SCHEDULER] Sent daily quiz to {len(users)} users")
 
 def start_scheduler():
-    """Start background scheduler"""
+    """Start background scheduler with timezone support"""
     scheduler = BackgroundScheduler()
     
-    # Scrape at 9:55 AM
+    # Scrape at 9:55 AM Amsterdam time
     scheduler.add_job(
         scrape_daily_quiz,
-        CronTrigger(hour=9, minute=55),
+        CronTrigger(hour=9, minute=55, timezone=TIMEZONE),
         id='scrape_quiz_955am',
         name='Scrape Quiz at 9:55 AM',
         replace_existing=True
     )
     
-    # Send quiz at 10:00 AM
+    # Send quiz at 10:00 AM Amsterdam time
     scheduler.add_job(
         broadcast_daily_quiz,
-        CronTrigger(hour=10, minute=0),
+        CronTrigger(hour=10, minute=0, timezone=TIMEZONE),
         id='daily_quiz_10am',
         name='Daily Quiz at 10:00 AM',
         replace_existing=True
     )
     
     scheduler.start()
-    logger.info("📅 [SCHEDULER] Started - Daily scrape at 9:55 AM, send at 10:00 AM")
+    tz_str = TIMEZONE.zone
+    logger.info(f"[SCHEDULER] Started - Daily scrape at 9:55 AM {tz_str}, send at 10:00 AM {tz_str}")
     
     return scheduler

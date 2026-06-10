@@ -577,24 +577,33 @@ def show_leaderboard(chat_id, user_id):
         logger.info(f"📊 [LEADERBOARD] Quiz title: {quiz_title}")
         
         message = f"🏆 **{quiz_title}**\n{quiz_date}\n\n"
+        logger.info(f"📊 [LEADERBOARD] Started building message. Users to process: {len(leaderboard)}")
         
         medals = ["🥇", "🥈", "🥉"]
         top_count = min(3, len(leaderboard))
         logger.info(f"📊 [LEADERBOARD] Building top {top_count} entries")
+        
         for idx in range(top_count):
-            db_user_id, username, correct, answered = leaderboard[idx]
-            medal = medals[idx] if idx < 3 else "  "
-            display_name = f"@{username}" if username and username != "Player" else f"Player {db_user_id % 10000}"
-            message += f"{medal} {display_name} — {correct}/10\n"
-            logger.info(f"📊 [LEADERBOARD] Top {idx+1}: {display_name} = {correct}/10")
+            try:
+                db_user_id, username, correct, answered = leaderboard[idx]
+                medal = medals[idx] if idx < 3 else "  "
+                display_name = f"@{username}" if username and username != "Player" else f"Player {db_user_id % 10000}"
+                line = f"{medal} {display_name} — {correct}/10\n"
+                message += line
+                logger.info(f"📊 [LEADERBOARD] Top {idx+1}: {display_name} = {correct}/10")
+            except Exception as e:
+                logger.error(f"❌ [LEADERBOARD] Error processing top {idx}: {e}", exc_info=True)
+                continue
         
         user_rank = None
         user_score = None
+        logger.info(f"📊 [LEADERBOARD] Searching for user {user_id} in {len(leaderboard)} rows...")
+        
         for idx, (db_user_id, username, correct, answered) in enumerate(leaderboard):
             if db_user_id == user_id:
                 user_rank = idx + 1
                 user_score = correct
-                logger.info(f"📊 [LEADERBOARD] User {user_id} is rank {user_rank} with {correct} correct")
+                logger.info(f"📊 [LEADERBOARD] Found user {user_id} is rank {user_rank} with {correct} correct")
                 break
         
         total_players = len(leaderboard)
@@ -612,16 +621,21 @@ def show_leaderboard(chat_id, user_id):
             message = message[:3900] + "\n\n...*Leaderboard truncated*"
             logger.info(f"📊 [LEADERBOARD] Truncated to {len(message)} chars")
         
-        logger.info(f"📊 [LEADERBOARD] Sending message to chat {chat_id}")
+        logger.info(f"📊 [LEADERBOARD] Sending {len(message)} char message to chat {chat_id}")
         result = send_message(chat_id, message)
         logger.info(f"📊 [LEADERBOARD] send_message returned: {result}")
         
         if not result:
-            logger.error(f"❌ [LEADERBOARD] Failed to send message! Message was: {message[:200]}...")
+            logger.error(f"❌ [LEADERBOARD] Failed to send message! First 200 chars: {message[:200]}")
+        else:
+            logger.info(f"✅ [LEADERBOARD] Message sent successfully!")
         
     except Exception as e:
-        logger.error(f"❌ [LEADERBOARD] CRITICAL ERROR: {e}", exc_info=True)
-        send_message(chat_id, f"❌ Error loading leaderboard: {str(e)[:100]}")
+        logger.error(f"❌ [LEADERBOARD] CRITICAL ERROR in show_leaderboard: {type(e).__name__}: {e}", exc_info=True)
+        try:
+            send_message(chat_id, f"❌ Error loading leaderboard: {str(e)[:50]}")
+        except Exception as send_err:
+            logger.error(f"❌ [LEADERBOARD] Failed to send error message: {send_err}")
 
 def get_updates(offset=0):
     """Get updates from Telegram with shorter timeout"""

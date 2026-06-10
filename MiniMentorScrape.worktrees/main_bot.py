@@ -610,17 +610,25 @@ def show_leaderboard(chat_id, user_id):
         send_message(chat_id, f"❌ Error loading leaderboard: {str(e)[:100]}")
 
 def get_updates(offset=0):
-    """Get updates from Telegram"""
+    """Get updates from Telegram with shorter timeout"""
     try:
         logger.info(f"📡 [GET_UPDATES] Polling with offset {offset}...")
-        response = requests.get(f"{API_URL}/getUpdates", params={"offset": offset, "timeout": 30}, timeout=35)
+        response = requests.get(
+            f"{API_URL}/getUpdates", 
+            params={"offset": offset, "timeout": 10},  # Reduced from 30 to 10 seconds
+            timeout=15  # Reduced from 35 to 15 seconds
+        )
         logger.info(f"📡 [GET_UPDATES] Got HTTP {response.status_code}")
         result = response.json()
         updates = result.get("result", [])
-        logger.info(f"📡 [GET_UPDATES] Returned {len(updates)} updates")
+        if updates:
+            logger.info(f"📡 [GET_UPDATES] Returned {len(updates)} updates")
         return updates
+    except requests.exceptions.Timeout:
+        logger.warning(f"⏱️ [GET_UPDATES] Timeout - will retry next poll")
+        return []
     except Exception as e:
-        logger.error(f"❌ [GET_UPDATES] Exception during polling: {e}", exc_info=True)
+        logger.error(f"❌ [GET_UPDATES] Exception: {e}")
         return []
 
 def main():

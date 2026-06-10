@@ -668,21 +668,23 @@ def main():
     
     offset = 0
     update_count = 0
+    poll_count = 0
     
     try:
         while True:
             try:
                 updates = get_updates(offset)
+                poll_count += 1
                 
-                if updates:
-                    logger.info(f"📬 Got {len(updates)} update(s)")
+                if poll_count % 10 == 0:  # Log every 10 polls
+                    logger.info(f"📡 [POLLING] Poll #{poll_count}: Got {len(updates)} update(s)")
                 
                 for update in updates:
                     try:
                         update_count += 1
                         offset = update["update_id"] + 1
                         
-                        # Log all updates
+                        # Log all updates IMMEDIATELY
                         update_type = "UNKNOWN"
                         if "message" in update:
                             update_type = "MESSAGE"
@@ -706,11 +708,14 @@ def main():
                         
                         # Handle button clicks
                         elif "callback_query" in update:
+                            logger.info(f"🔹 CALLBACK DETECTED! Processing...")
                             query = update["callback_query"]
                             user_id = query["from"]["id"]
                             username = query["from"].get("username", "user")
                             user_db.add_user(user_id, username)
+                            logger.info(f"🔹 Calling handle_callback with data: {query.get('data')}")
                             handle_callback(query["id"], query["message"]["chat"]["id"], user_id, query["data"])
+                            logger.info(f"🔹 handle_callback completed")
                         
                         # Handle poll answers (auto-send next question)
                         elif "poll_answer" in update:
@@ -722,11 +727,11 @@ def main():
                             handle_poll_answer(user_id, poll_id, option_id)
                     
                     except Exception as e:
-                        logger.error(f"❌ Exception processing update #{update_count}: {e}", exc_info=True)
+                        logger.error(f"❌ Exception processing update #{update_count}: {type(e).__name__}: {e}", exc_info=True)
                         continue
             
             except Exception as e:
-                logger.error(f"❌ CRITICAL ERROR in polling loop: {e}", exc_info=True)
+                logger.error(f"❌ CRITICAL ERROR in polling loop: {type(e).__name__}: {e}", exc_info=True)
                 import time
                 time.sleep(5)  # Wait 5 seconds before retrying
     

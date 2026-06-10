@@ -199,7 +199,7 @@ class UserDB:
                     ORDER BY correct DESC, answered ASC, qr.user_id ASC
                 """, (quiz_date,))
                 results = cursor.fetchall()
-                logger.info(f"Leaderboard query returned {len(results)} users for date {quiz_date}")
+                logger.info(f"Leaderboard query returned {len(results)} users for quiz '{quiz_date}'")
                 return results
         except sqlite3.OperationalError as e:
             logger.error(f"Database operational error fetching leaderboard: {e}")
@@ -376,16 +376,20 @@ def start_quiz(chat_id, user_id):
         send_message(chat_id, "❌ No quiz available today. Try again later!")
         return
     
-    today = datetime.now().strftime("%Y-%m-%d")
-    progress, quiz_date = user_db.get_user_progress(user_id)
+    # Use quiz date as identifier, not calendar date
+    quiz_date = quiz.get("date", "unknown")
+    logger.info(f"📝 [START_QUIZ] Quiz date/ID: {quiz_date}")
     
-    # Reset if it's a new day
-    if quiz_date != today:
+    progress, stored_quiz_date = user_db.get_user_progress(user_id)
+    
+    # Reset if it's a different quiz
+    if stored_quiz_date != quiz_date:
+        logger.info(f"📝 [START_QUIZ] New quiz detected! (was: {stored_quiz_date}, now: {quiz_date})")
         progress = 0
-        user_db.set_user_progress(user_id, 0, today)
+        user_db.set_user_progress(user_id, 0, quiz_date)
     
     if progress >= len(quiz["questions"]):
-        send_message(chat_id, "🎉 You've completed today's quiz! Come back tomorrow for new questions.")
+        send_message(chat_id, "🎉 You've completed today's quiz! Come back when the next quiz is available.")
         return
     
     total = len(quiz["questions"])
@@ -428,13 +432,16 @@ def handle_poll_answer(user_id, poll_id, option_id):
     if not quiz:
         return
     
-    progress, quiz_date = user_db.get_user_progress(user_id)
-    today = datetime.now().strftime("%Y-%m-%d")
+    # Use quiz date as identifier
+    quiz_date = quiz.get("date", "unknown")
     
-    # Reset if new day
-    if quiz_date != today:
+    progress, stored_quiz_date = user_db.get_user_progress(user_id)
+    
+    # Reset if new quiz
+    if stored_quiz_date != quiz_date:
+        logger.info(f"✅ [POLL] New quiz detected! Resetting progress (was: {stored_quiz_date}, now: {quiz_date})")
         progress = 0
-        user_db.set_user_progress(user_id, 0, today)
+        user_db.set_user_progress(user_id, 0, quiz_date)
     
     poll_key_map = (user_id, poll_id)
     if poll_key_map in poll_question_map:
@@ -446,7 +453,7 @@ def handle_poll_answer(user_id, poll_id, option_id):
         )
     
     if question_index >= len(quiz["questions"]):
-        send_message(user_id, "🏆 All done! You already completed today's quiz!")
+        send_message(user_id, "🏆 All done! You already completed this quiz!")
         return
     
     # Reject answers to polls from an earlier question in today's quiz
@@ -469,18 +476,18 @@ def handle_poll_answer(user_id, poll_id, option_id):
         send_message(user_id, f"{msg}\n\n💡 The correct answer was: **{correct_answer}**")
     
     user_db.record_answer(
-        user_id, today, question_index + 1, q["options"][option_id], was_correct,
+        user_id, quiz_date, question_index + 1, q["options"][option_id], was_correct,
         poll_id=poll_id, option_id=option_id
     )
     
     progress = question_index + 1
-    user_db.set_user_progress(user_id, progress, today)
+    user_db.set_user_progress(user_id, progress, quiz_date)
     
     time.sleep(0.5)
     
     total = len(quiz["questions"])
     if progress >= total:
-        send_message(user_id, f"🏆 Awesome! You completed all {total} questions today! 🎉")
+        send_message(user_id, f"🏆 Awesome! You completed all {total} questions! 🎉")
         return
     
     logger.info(f"➡️ Sending Q{progress + 1} to user {user_id}")
@@ -543,26 +550,33 @@ def show_stats(chat_id, user_id):
     )
 
 def show_leaderboard(chat_id, user_id):
-    """Show today's leaderboard with user rank"""
+    """Show leaderboard for current quiz"""
     try:
         logger.info(f"📊 [LEADERBOARD] User {user_id} requested leaderboard in chat {chat_id}")
-        today = datetime.now().strftime("%Y-%m-%d")
         
-        logger.info(f"📊 [LEADERBOARD] Fetching leaderboard for date: {today}")
-        leaderboard = user_db.get_today_leaderboard(today)
+        quiz = load_quiz()
+        if not quiz:
+            logger.error(f"📊 [LEADERBOARD] Could not load quiz")
+            send_message(chat_id, "❌ Could not load quiz. Try again later.")
+            return
+        
+        # Use quiz date as identifier
+        quiz_date = quiz.get("date", "unknown")
+        logger.info(f"📊 [LEADERBOARD] Fetching leaderboard for quiz: {quiz_date}")
+        
+        leaderboard = user_db.get_today_leaderboard(quiz_date)
         logger.info(f"📊 [LEADERBOARD] Got {len(leaderboard)} users on leaderboard")
         
         if not leaderboard:
-            logger.warning(f"📊 [LEADERBOARD] No scores found for {today}")
-            result = send_message(chat_id, "🏆 **Today's Leaderboard**\n\nNo scores yet today. Be the first to take the quiz!")
+            logger.warning(f"📊 [LEADERBOARD] No scores found for {quiz_date}")
+            result = send_message(chat_id, "🏆 **Today's Leaderboard**\n\nNo scores yet. Be the first to complete the quiz!")
             logger.info(f"📊 [LEADERBOARD] Sent empty leaderboard message: {result}")
             return
         
-        quiz = load_quiz()
-        quiz_title = quiz.get("title", "Daily Quiz") if quiz else "Daily Quiz"
+        quiz_title = quiz.get("title", "Daily Quiz")
         logger.info(f"📊 [LEADERBOARD] Quiz title: {quiz_title}")
         
-        message = f"🏆 **Today's Leaderboard**\n{quiz_title} — {today}\n\n"
+        message = f"🏆 **{quiz_title}**\n{quiz_date}\n\n"
         
         medals = ["🥇", "🥈", "🥉"]
         top_count = min(3, len(leaderboard))
@@ -587,7 +601,7 @@ def show_leaderboard(chat_id, user_id):
         message += f"\n**You: {user_score or 0}/10** — Rank #{user_rank or '—'} of {total_players}"
         
         if user_rank is None:
-            message += "\nStart the quiz to join today's board!"
+            message += "\nStart the quiz to join the leaderboard!"
             logger.info(f"📊 [LEADERBOARD] User {user_id} not on leaderboard yet")
         
         logger.info(f"📊 [LEADERBOARD] Final message length: {len(message)} chars")

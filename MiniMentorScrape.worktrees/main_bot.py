@@ -612,6 +612,15 @@ def main():
                                 username = msg["from"].get("username", "user")
                                 user_db.add_user(user_id, username)
                                 handle_start(msg["chat"]["id"], user_id)
+                            elif msg.get("text") == "/scrape":
+                                chat_id = msg["chat"]["id"]
+                                send_message(chat_id, "⏳ Fetching today's quiz...")
+                                fetch_and_save_quiz()
+                                quiz = load_quiz()
+                                if quiz:
+                                    send_message(chat_id, f"✅ Got it! **{quiz['title']}** ({quiz.get('date', '?')}) — {len(quiz['questions'])} questions")
+                                else:
+                                    send_message(chat_id, "❌ Failed to fetch quiz. Check logs.")
 
                         elif "callback_query" in update:
                             query = update["callback_query"]

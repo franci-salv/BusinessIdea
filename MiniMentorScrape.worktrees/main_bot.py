@@ -8,17 +8,14 @@ import os
 import json
 import sqlite3
 import logging
+import sys
 import time
+import random
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 # Load environment
@@ -27,7 +24,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 if not BOT_TOKEN:
     logger.error("❌ TELEGRAM_BOT_TOKEN not set in .env file!")
-    exit(1)
+    sys.exit(1)
 
 QUIZ_PATH = os.path.join(os.path.dirname(__file__), "data", "daily_quiz.json")
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "users.db")
@@ -75,11 +72,16 @@ def _add_column_if_missing(conn, table, column, definition):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
+def _get_quiz_id(quiz):
+    """Get a stable identifier for a quiz (title + date combo)."""
+    return quiz.get("date", "unknown")
+
+
 class UserDB:
     def __init__(self, db_path):
         self.db_path = db_path
         self.init_db()
-    
+
     def init_db(self):
         with sqlite3.connect(self.db_path, timeout=5.0) as conn:
             conn.execute("""
@@ -92,10 +94,10 @@ class UserDB:
                     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
+
             _add_column_if_missing(conn, "users", "quiz_progress", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "users", "today_quiz_date", "TEXT")
-            
+
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS quiz_responses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,13 +109,12 @@ class UserDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            # Migrate legacy schema from core/telegram_bot.py
             _add_column_if_missing(conn, "quiz_responses", "poll_id", "INTEGER")
             _add_column_if_missing(conn, "quiz_responses", "answer_index", "INTEGER")
             _add_column_if_missing(conn, "quiz_responses", "question_number", "INTEGER")
             _add_column_if_missing(conn, "quiz_responses", "answer_text", "TEXT")
             conn.commit()
-    
+
     def add_user(self, user_id, username):
         try:
             with sqlite3.connect(self.db_path, timeout=5.0) as conn:
@@ -122,11 +123,9 @@ class UserDB:
                     (user_id, username)
                 )
                 conn.commit()
-        except sqlite3.OperationalError as e:
-            logger.error(f"Database lock adding user {user_id}: {e}")
         except Exception as e:
             logger.error(f"Error adding user: {e}")
-    
+
     def get_user_progress(self, user_id):
         try:
             with sqlite3.connect(self.db_path, timeout=5.0) as conn:
@@ -136,13 +135,10 @@ class UserDB:
                 )
                 result = cursor.fetchone()
                 return result if result else (0, None)
-        except sqlite3.OperationalError as e:
-            logger.error(f"Database lock getting progress for user {user_id}: {e}")
-            return (0, None)
         except Exception as e:
             logger.error(f"Error getting progress: {e}")
             return (0, None)
-    
+
     def set_user_progress(self, user_id, progress, quiz_date):
         try:
             with sqlite3.connect(self.db_path, timeout=5.0) as conn:
@@ -155,34 +151,22 @@ class UserDB:
                     (user_id, progress, quiz_date)
                 )
                 conn.commit()
-        except sqlite3.OperationalError as e:
-            logger.error(f"Database lock setting progress for user {user_id}: {e}")
         except Exception as e:
             logger.error(f"Error setting progress: {e}")
-    
+
     def record_answer(self, user_id, quiz_date, question_num, answer, is_correct, poll_id=None, option_id=None):
         try:
             with sqlite3.connect(self.db_path, timeout=5.0) as conn:
-                cols = _table_columns(conn, "quiz_responses")
-                if "question_number" in cols and "answer_text" in cols:
-                    conn.execute(
-                        "INSERT INTO quiz_responses "
-                        "(user_id, quiz_date, question_number, answer_text, is_correct, poll_id, answer_index) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (user_id, quiz_date, question_num, answer, is_correct, poll_id, option_id)
-                    )
-                else:
-                    conn.execute(
-                        "INSERT INTO quiz_responses (user_id, quiz_date, poll_id, answer_index, is_correct) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (user_id, quiz_date, poll_id or 0, option_id or 0, is_correct)
-                    )
+                conn.execute(
+                    "INSERT INTO quiz_responses "
+                    "(user_id, quiz_date, question_number, answer_text, is_correct, poll_id, answer_index) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (user_id, quiz_date, question_num, answer, is_correct, poll_id, option_id)
+                )
                 conn.commit()
-        except sqlite3.OperationalError as e:
-            logger.error(f"Database lock recording answer for user {user_id}: {e}")
         except Exception as e:
             logger.error(f"Error recording answer: {e}")
-    
+
     def get_today_leaderboard(self, quiz_date):
         try:
             with sqlite3.connect(self.db_path, timeout=5.0) as conn:
@@ -190,7 +174,7 @@ class UserDB:
                     SELECT
                       qr.user_id,
                       COALESCE(u.username, 'Player') AS username,
-                      SUM(qr.is_correct) AS correct,
+                      CAST(SUM(qr.is_correct) AS INTEGER) AS correct,
                       COUNT(*) AS answered
                     FROM quiz_responses qr
                     LEFT JOIN users u ON u.user_id = qr.user_id
@@ -199,25 +183,23 @@ class UserDB:
                     ORDER BY correct DESC, answered ASC, qr.user_id ASC
                 """, (quiz_date,))
                 results = cursor.fetchall()
-                logger.info(f"Leaderboard query returned {len(results)} users for quiz '{quiz_date}'")
+                logger.info(f"Leaderboard query for '{quiz_date}': {len(results)} user(s)")
                 return results
-        except sqlite3.OperationalError as e:
-            logger.error(f"Database operational error fetching leaderboard: {e}")
-            return []
         except Exception as e:
-            logger.error(f"Error fetching leaderboard: {e}")
+            logger.error(f"Error fetching leaderboard: {e}", exc_info=True)
             return []
+
 
 def load_quiz():
     try:
         if not os.path.exists(QUIZ_PATH):
             logger.warning(f"Quiz file not found at: {QUIZ_PATH}. Fetching fresh quiz...")
             fetch_and_save_quiz()
-        
+
         if not os.path.exists(QUIZ_PATH):
             logger.error(f"Failed to fetch quiz. File still missing at: {QUIZ_PATH}")
             return None
-            
+
         with open(QUIZ_PATH, 'r', encoding='utf-8') as f:
             quiz = json.load(f)
             if not quiz.get("questions"):
@@ -232,53 +214,54 @@ def load_quiz():
         logger.error(f"Error loading quiz from {QUIZ_PATH}: {e}")
         return None
 
+
 def fetch_and_save_quiz():
     """Fetch quiz from API and save locally"""
     try:
         logger.info("Fetching quiz from API...")
         headers = {"User-Agent": "Mozilla/5.0"}
-        
+
         quiz_list_url = "https://quizoftheday.co.uk/api/quizzes"
         res = requests.get(quiz_list_url, headers=headers, timeout=10)
         quiz_list = res.json()
-        
+
         latest_quiz = quiz_list["quizzes"][0]
         quiz_id = latest_quiz["id"]
         quiz_title = latest_quiz["name"]
         quiz_date = latest_quiz["quizDate"]
-        
+
         quiz_url = f"https://quizoftheday.co.uk/api/quiz/{quiz_id}"
         res = requests.get(quiz_url, headers=headers, timeout=10)
         quiz_data = res.json()["quiz"]
-        
+
         output = {
             "title": quiz_title,
             "date": quiz_date,
             "questions": []
         }
-        
+
         for q in quiz_data["questions"]:
             question_text = q["text"]
             options = [a["text"] for a in q["answers"]]
             correct_answer = next(a["text"] for a in q["answers"] if a["correct"])
-            
+
             output["questions"].append({
                 "question": question_text,
                 "options": options,
                 "correct_answer": correct_answer
             })
-        
+
         os.makedirs(os.path.dirname(QUIZ_PATH), exist_ok=True)
         with open(QUIZ_PATH, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=2, ensure_ascii=False)
-        
-        logger.info(f"Fetched and saved quiz: {quiz_title} ({len(output['questions'])} questions)")
+
+        logger.info(f"✅ Fetched and saved quiz: {quiz_title} ({quiz_date}) - {len(output['questions'])} questions")
     except Exception as e:
-        logger.error(f"Error fetching quiz from API: {e}")
+        logger.error(f"❌ Error fetching quiz from API: {e}", exc_info=True)
+
 
 def send_message(chat_id, text):
-    """Send a text message"""
-    logger.info(f"📤 [SEND_MSG] Attempting to send {len(text)} char message to chat {chat_id}")
+    """Send a text message via Telegram API"""
     data = {
         "chat_id": chat_id,
         "text": text,
@@ -286,18 +269,16 @@ def send_message(chat_id, text):
     }
     try:
         response = requests.post(f"{API_URL}/sendMessage", json=data, timeout=10)
-        logger.info(f"📤 [SEND_MSG] Got HTTP {response.status_code} response")
         result = response.json()
-        logger.info(f"📤 [SEND_MSG] API response: ok={result.get('ok')}, error_code={result.get('error_code')}")
         if not result.get("ok"):
             error_desc = result.get('description', 'Unknown error')
-            logger.error(f"❌ [SEND_MSG] Telegram API error: {error_desc} | Message length: {len(text)}")
+            logger.error(f"Telegram API error: {error_desc} (chat={chat_id}, len={len(text)})")
             return False
-        logger.info(f"✅ [SEND_MSG] Message sent successfully")
         return True
     except Exception as e:
-        logger.error(f"❌ [SEND_MSG] Exception: {e} | Message length: {len(text)}", exc_info=True)
+        logger.error(f"Error sending message to {chat_id}: {e}")
         return False
+
 
 def send_poll(chat_id, question, options, correct_option_id):
     """Send a poll. Returns Telegram poll id on success."""
@@ -320,6 +301,7 @@ def send_poll(chat_id, question, options, correct_option_id):
         logger.error(f"Error sending poll: {e}")
     return None
 
+
 def handle_start(chat_id, user_id):
     """Handle /start command"""
     keyboard = {
@@ -330,7 +312,7 @@ def handle_start(chat_id, user_id):
             [{"text": "🛑 Unsubscribe", "callback_data": "unsubscribe"}]
         ]
     }
-    
+
     send_message(
         chat_id,
         "🎉 Welcome to **Daily Puzzle Master**!\n\n"
@@ -338,35 +320,31 @@ def handle_start(chat_id, user_id):
         "Answer them one by one and earn encouragement! 🌟\n\n"
         "*What would you like to do?*"
     )
-    
-    # Send the keyboard
+
     requests.post(f"{API_URL}/sendMessage", json={
         "chat_id": chat_id,
         "text": "Choose an option:",
         "reply_markup": keyboard
     })
 
+
 def handle_callback(query_id, chat_id, user_id, data):
     """Handle button clicks"""
-    logger.info(f"🔘 [CALLBACK] User {user_id} clicked: {data}")
+    logger.info(f"[CALLBACK] user={user_id} data={data}")
     requests.post(f"{API_URL}/answerCallbackQuery", json={"callback_query_id": query_id, "text": "Loading..."})
-    
+
     if data == "start_quiz":
-        logger.info(f"🔘 [CALLBACK] Starting quiz for user {user_id}")
         start_quiz(chat_id, user_id)
     elif data == "stats":
-        logger.info(f"🔘 [CALLBACK] Showing stats for user {user_id}")
         show_stats(chat_id, user_id)
     elif data == "leaderboard":
-        logger.info(f"🔘 [CALLBACK] Showing leaderboard for user {user_id}")
         show_leaderboard(chat_id, user_id)
     elif data == "unsubscribe":
-        logger.info(f"🔘 [CALLBACK] Unsubscribing user {user_id}")
         user_db.add_user(user_id, "")
         send_message(chat_id, "✅ Unsubscribed! Use /start to resubscribe.")
     elif data.startswith("answer_"):
-        logger.info(f"🔘 [CALLBACK] Handling answer for user {user_id}")
         handle_answer(chat_id, user_id, data)
+
 
 def start_quiz(chat_id, user_id):
     """Start or resume quiz"""
@@ -375,37 +353,34 @@ def start_quiz(chat_id, user_id):
     if not quiz or not quiz.get("questions"):
         send_message(chat_id, "❌ No quiz available today. Try again later!")
         return
-    
-    # Use quiz date as identifier, not calendar date
-    quiz_date = quiz.get("date", "unknown")
-    logger.info(f"📝 [START_QUIZ] Quiz date/ID: {quiz_date}")
-    
-    progress, stored_quiz_date = user_db.get_user_progress(user_id)
-    
-    # Reset if it's a different quiz
-    if stored_quiz_date != quiz_date:
-        logger.info(f"📝 [START_QUIZ] New quiz detected! (was: {stored_quiz_date}, now: {quiz_date})")
+
+    quiz_id = _get_quiz_id(quiz)
+    progress, stored_quiz_id = user_db.get_user_progress(user_id)
+
+    if stored_quiz_id != quiz_id:
+        logger.info(f"[QUIZ] New quiz for user {user_id}: '{stored_quiz_id}' -> '{quiz_id}'")
         progress = 0
-        user_db.set_user_progress(user_id, 0, quiz_date)
-    
+        user_db.set_user_progress(user_id, 0, quiz_id)
+
     if progress >= len(quiz["questions"]):
         send_message(chat_id, "🎉 You've completed today's quiz! Come back when the next quiz is available.")
         return
-    
+
     total = len(quiz["questions"])
     send_message(chat_id, f"📚 **{quiz.get('title', 'Daily Quiz')}**\n\nQuestion {progress + 1}/{total}")
     send_next_question(chat_id, user_id, quiz, progress)
+
 
 def send_next_question(chat_id, user_id, quiz, question_index):
     """Send the next question"""
     if question_index >= len(quiz["questions"]):
         send_message(chat_id, "🏆 All done! You completed today's quiz!")
         return
-    
+
     q = quiz["questions"][question_index]
     options = q["options"]
     correct_idx = options.index(q["correct_answer"])
-    
+
     poll_id = send_poll(
         chat_id,
         f"Q{question_index + 1}: {q['question']}",
@@ -415,100 +390,82 @@ def send_next_question(chat_id, user_id, quiz, question_index):
     if poll_id is not None:
         poll_question_map[(user_id, poll_id)] = question_index
 
+
 def handle_poll_answer(user_id, poll_id, option_id):
     """Handle poll answer and send next question"""
     global processed_polls
-    
-    # Prevent duplicate processing
+
     poll_key = f"{user_id}_{poll_id}"
     if poll_key in processed_polls:
-        logger.info(f"⏭️ Poll already processed: {poll_key}")
         return
-    
+
     processed_polls.add(poll_key)
     user_db.add_user(user_id, "")
-    
+
     quiz = load_quiz()
     if not quiz:
         return
-    
-    # Use quiz date as identifier
-    quiz_date = quiz.get("date", "unknown")
-    
-    progress, stored_quiz_date = user_db.get_user_progress(user_id)
-    
-    # Reset if new quiz
-    if stored_quiz_date != quiz_date:
-        logger.info(f"✅ [POLL] New quiz detected! Resetting progress (was: {stored_quiz_date}, now: {quiz_date})")
+
+    quiz_id = _get_quiz_id(quiz)
+    progress, stored_quiz_id = user_db.get_user_progress(user_id)
+
+    if stored_quiz_id != quiz_id:
         progress = 0
-        user_db.set_user_progress(user_id, 0, quiz_date)
-    
+        user_db.set_user_progress(user_id, 0, quiz_id)
+
     poll_key_map = (user_id, poll_id)
     if poll_key_map in poll_question_map:
         question_index = poll_question_map.pop(poll_key_map)
     else:
         question_index = progress
-        logger.warning(
-            f"Poll {poll_id} not tracked for user {user_id}, using DB progress {progress}"
-        )
-    
+        logger.warning(f"Poll {poll_id} not tracked for user {user_id}, using DB progress {progress}")
+
     if question_index >= len(quiz["questions"]):
         send_message(user_id, "🏆 All done! You already completed this quiz!")
         return
-    
-    # Reject answers to polls from an earlier question in today's quiz
+
     if question_index < progress:
-        logger.info(f"Ignoring stale poll answer: Q{question_index + 1} (progress is Q{progress + 1})")
         return
-    
+
     q = quiz["questions"][question_index]
     correct_idx = q["options"].index(q["correct_answer"])
     was_correct = (option_id == correct_idx)
-    
+
     if was_correct:
-        import random
-        msg = random.choice(ENCOURAGEMENTS)
-        send_message(user_id, msg)
+        send_message(user_id, random.choice(ENCOURAGEMENTS))
     else:
-        import random
-        msg = random.choice(WRONG_MESSAGES)
         correct_answer = q["correct_answer"]
-        send_message(user_id, f"{msg}\n\n💡 The correct answer was: **{correct_answer}**")
-    
+        send_message(user_id, f"{random.choice(WRONG_MESSAGES)}\n\n💡 The correct answer was: **{correct_answer}**")
+
     user_db.record_answer(
-        user_id, quiz_date, question_index + 1, q["options"][option_id], was_correct,
+        user_id, quiz_id, question_index + 1, q["options"][option_id], was_correct,
         poll_id=poll_id, option_id=option_id
     )
-    
+
     progress = question_index + 1
-    user_db.set_user_progress(user_id, progress, quiz_date)
-    
+    user_db.set_user_progress(user_id, progress, quiz_id)
+
     time.sleep(0.5)
-    
+
     total = len(quiz["questions"])
     if progress >= total:
         send_message(user_id, f"🏆 Awesome! You completed all {total} questions! 🎉")
         return
-    
-    logger.info(f"➡️ Sending Q{progress + 1} to user {user_id}")
+
     send_next_question(user_id, user_id, quiz, progress)
+
 
 def broadcast_daily_quiz():
     """Send quiz to all subscribed users"""
     logger.info("📢 Broadcasting daily quiz...")
-    user_db_inst = UserDB(DB_PATH)
-    
     try:
         with sqlite3.connect(DB_PATH, timeout=5.0) as conn:
             cursor = conn.execute("SELECT user_id FROM users WHERE subscribed = 1")
             users = [row[0] for row in cursor.fetchall()]
-    except sqlite3.OperationalError as e:
-        logger.error(f"Database lock fetching users for broadcast: {e}")
-        return
     except Exception as e:
         logger.error(f"Error fetching users: {e}")
         return
-    
+
     for user_id in users:
         try:
             send_message(user_id, "🎉 Good morning! Today's puzzle is here! Use /start to begin.")
@@ -517,8 +474,9 @@ def broadcast_daily_quiz():
         except Exception as e:
             logger.error(f"Error sending to user {user_id}: {e}")
         time.sleep(0.5)
-    
+
     logger.info(f"✅ Sent to {len(users)} users")
+
 
 def show_stats(chat_id, user_id):
     """Show user statistics"""
@@ -529,19 +487,16 @@ def show_stats(chat_id, user_id):
                 (user_id,)
             )
             correct = cursor.fetchone()[0]
-            
+
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM quiz_responses WHERE user_id = ?",
                 (user_id,)
             )
             total = cursor.fetchone()[0]
-    except sqlite3.OperationalError as e:
-        logger.error(f"Database lock fetching stats for user {user_id}: {e}")
-        correct, total = 0, 0
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
         correct, total = 0, 0
-    
+
     wrong = total - correct
     percentage = int((correct / total * 100)) if total > 0 else 0
     send_message(
@@ -549,115 +504,87 @@ def show_stats(chat_id, user_id):
         f"📊 **Your Stats**\n\n✅ Correct: {correct}\n❌ Wrong: {wrong}\n📝 Answered: {total}\n📈 Accuracy: {percentage}%"
     )
 
+
 def show_leaderboard(chat_id, user_id):
     """Show leaderboard for current quiz"""
     try:
-        logger.info(f"📊 [LEADERBOARD] User {user_id} requested leaderboard in chat {chat_id}")
-        
         quiz = load_quiz()
         if not quiz:
-            logger.error(f"📊 [LEADERBOARD] Could not load quiz")
             send_message(chat_id, "❌ Could not load quiz. Try again later.")
             return
-        
-        # Use quiz date as identifier
-        quiz_date = quiz.get("date", "unknown")
-        logger.info(f"📊 [LEADERBOARD] Fetching leaderboard for quiz: {quiz_date}")
-        
-        leaderboard = user_db.get_today_leaderboard(quiz_date)
-        logger.info(f"📊 [LEADERBOARD] Got {len(leaderboard)} users on leaderboard")
-        
+
+        quiz_id = _get_quiz_id(quiz)
+        logger.info(f"[LEADERBOARD] user={user_id} quiz_id='{quiz_id}'")
+
+        leaderboard = user_db.get_today_leaderboard(quiz_id)
+
         if not leaderboard:
-            logger.warning(f"📊 [LEADERBOARD] No scores found for {quiz_date}")
-            result = send_message(chat_id, "🏆 **Today's Leaderboard**\n\nNo scores yet. Be the first to complete the quiz!")
-            logger.info(f"📊 [LEADERBOARD] Sent empty leaderboard message: {result}")
+            send_message(chat_id, "🏆 **Today's Leaderboard**\n\nNo scores yet. Be the first to complete the quiz!")
             return
-        
+
         quiz_title = quiz.get("title", "Daily Quiz")
-        logger.info(f"📊 [LEADERBOARD] Quiz title: {quiz_title}")
-        
-        message = f"🏆 **{quiz_title}**\n{quiz_date}\n\n"
-        logger.info(f"📊 [LEADERBOARD] Started building message. Users to process: {len(leaderboard)}")
-        
+        total_q = len(quiz.get("questions", []))
+
+        message = f"🏆 **{quiz_title}**\n{quiz_id}\n\n"
+
         medals = ["🥇", "🥈", "🥉"]
         top_count = min(3, len(leaderboard))
-        logger.info(f"📊 [LEADERBOARD] Building top {top_count} entries")
-        
+
         for idx in range(top_count):
             try:
-                db_user_id, username, correct, answered = leaderboard[idx]
-                medal = medals[idx] if idx < 3 else "  "
+                row = leaderboard[idx]
+                db_user_id = row[0]
+                username = row[1]
+                correct = int(row[2]) if row[2] is not None else 0
+                medal = medals[idx]
                 display_name = f"@{username}" if username and username != "Player" else f"Player {db_user_id % 10000}"
-                line = f"{medal} {display_name} — {correct}/10\n"
-                message += line
-                logger.info(f"📊 [LEADERBOARD] Top {idx+1}: {display_name} = {correct}/10")
+                message += f"{medal} {display_name} — {correct}/{total_q}\n"
             except Exception as e:
-                logger.error(f"❌ [LEADERBOARD] Error processing top {idx}: {e}", exc_info=True)
+                logger.error(f"Error processing leaderboard row {idx}: {e}", exc_info=True)
                 continue
-        
+
         user_rank = None
         user_score = None
-        logger.info(f"📊 [LEADERBOARD] Searching for user {user_id} in {len(leaderboard)} rows...")
-        
-        for idx, (db_user_id, username, correct, answered) in enumerate(leaderboard):
-            if db_user_id == user_id:
+        for idx, row in enumerate(leaderboard):
+            if row[0] == user_id:
                 user_rank = idx + 1
-                user_score = correct
-                logger.info(f"📊 [LEADERBOARD] Found user {user_id} is rank {user_rank} with {correct} correct")
+                user_score = int(row[2]) if row[2] is not None else 0
                 break
-        
+
         total_players = len(leaderboard)
-        message += f"\n**You: {user_score or 0}/10** — Rank #{user_rank or '—'} of {total_players}"
-        
+        message += f"\n**You: {user_score or 0}/{total_q}** — Rank #{user_rank or '—'} of {total_players}"
+
         if user_rank is None:
             message += "\nStart the quiz to join the leaderboard!"
-            logger.info(f"📊 [LEADERBOARD] User {user_id} not on leaderboard yet")
-        
-        logger.info(f"📊 [LEADERBOARD] Final message length: {len(message)} chars")
-        
-        # Check message length to avoid Telegram's 4096 character limit
+
         if len(message) > 4000:
-            logger.warning(f"⚠️ [LEADERBOARD] Message too long ({len(message)} chars), truncating")
             message = message[:3900] + "\n\n...*Leaderboard truncated*"
-            logger.info(f"📊 [LEADERBOARD] Truncated to {len(message)} chars")
-        
-        logger.info(f"📊 [LEADERBOARD] Sending {len(message)} char message to chat {chat_id}")
+
         result = send_message(chat_id, message)
-        logger.info(f"📊 [LEADERBOARD] send_message returned: {result}")
-        
         if not result:
-            logger.error(f"❌ [LEADERBOARD] Failed to send message! First 200 chars: {message[:200]}")
-        else:
-            logger.info(f"✅ [LEADERBOARD] Message sent successfully!")
-        
+            logger.error(f"[LEADERBOARD] Failed to send to chat {chat_id}")
+
     except Exception as e:
-        logger.error(f"❌ [LEADERBOARD] CRITICAL ERROR in show_leaderboard: {type(e).__name__}: {e}", exc_info=True)
-        try:
-            send_message(chat_id, f"❌ Error loading leaderboard: {str(e)[:50]}")
-        except Exception as send_err:
-            logger.error(f"❌ [LEADERBOARD] Failed to send error message: {send_err}")
+        logger.error(f"[LEADERBOARD] ERROR: {e}", exc_info=True)
+        send_message(chat_id, "❌ Error loading leaderboard. Please try again.")
+
 
 def get_updates(offset=0):
-    """Get updates from Telegram with shorter timeout"""
+    """Get updates from Telegram"""
     try:
-        logger.info(f"📡 [GET_UPDATES] Polling with offset {offset}...")
         response = requests.get(
-            f"{API_URL}/getUpdates", 
-            params={"offset": offset, "timeout": 10},  # Reduced from 30 to 10 seconds
-            timeout=15  # Reduced from 35 to 15 seconds
+            f"{API_URL}/getUpdates",
+            params={"offset": offset, "timeout": 10},
+            timeout=15
         )
-        logger.info(f"📡 [GET_UPDATES] Got HTTP {response.status_code}")
         result = response.json()
-        updates = result.get("result", [])
-        if updates:
-            logger.info(f"📡 [GET_UPDATES] Returned {len(updates)} updates")
-        return updates
+        return result.get("result", [])
     except requests.exceptions.Timeout:
-        logger.warning(f"⏱️ [GET_UPDATES] Timeout - will retry next poll")
         return []
     except Exception as e:
-        logger.error(f"❌ [GET_UPDATES] Exception: {e}")
+        logger.error(f"Error getting updates: {e}")
         return []
+
 
 def main():
     """Start the bot"""
@@ -665,78 +592,54 @@ def main():
     user_db = UserDB(DB_PATH)
     logger.info("✅ Database initialized")
     logger.info("🤖 Bot is polling... Press Ctrl+C to stop")
-    
+
     offset = 0
-    update_count = 0
-    poll_count = 0
-    
+
     try:
         while True:
             try:
                 updates = get_updates(offset)
-                poll_count += 1
-                
-                if poll_count % 10 == 0:  # Log every 10 polls
-                    logger.info(f"📡 [POLLING] Poll #{poll_count}: Got {len(updates)} update(s)")
-                
+
                 for update in updates:
                     try:
-                        update_count += 1
                         offset = update["update_id"] + 1
-                        
-                        # Log all updates IMMEDIATELY
-                        update_type = "UNKNOWN"
-                        if "message" in update:
-                            update_type = "MESSAGE"
-                        elif "callback_query" in update:
-                            update_type = "CALLBACK"
-                        elif "poll_answer" in update:
-                            update_type = "POLL_ANSWER"
-                        else:
-                            update_type = f"OTHER: {list(update.keys())}"
-                        
-                        logger.info(f"🔹 Update #{update_count}: {update_type}")
-                        
-                        # Handle messages
+
                         if "message" in update:
                             msg = update["message"]
+                            logger.info(f"[UPDATE] message from {msg['from'].get('id')}: {msg.get('text', '')[:50]}")
                             if msg.get("text") == "/start":
                                 user_id = msg["from"]["id"]
                                 username = msg["from"].get("username", "user")
                                 user_db.add_user(user_id, username)
                                 handle_start(msg["chat"]["id"], user_id)
-                        
-                        # Handle button clicks
+
                         elif "callback_query" in update:
-                            logger.info(f"🔹 CALLBACK DETECTED! Processing...")
                             query = update["callback_query"]
                             user_id = query["from"]["id"]
                             username = query["from"].get("username", "user")
+                            logger.info(f"[UPDATE] callback from {user_id}: {query.get('data')}")
                             user_db.add_user(user_id, username)
-                            logger.info(f"🔹 Calling handle_callback with data: {query.get('data')}")
                             handle_callback(query["id"], query["message"]["chat"]["id"], user_id, query["data"])
-                            logger.info(f"🔹 handle_callback completed")
-                        
-                        # Handle poll answers (auto-send next question)
+
                         elif "poll_answer" in update:
                             poll_answer = update["poll_answer"]
                             user_id = poll_answer["user"]["id"]
                             poll_id = poll_answer["poll_id"]
                             option_id = poll_answer["option_ids"][0] if poll_answer.get("option_ids") else 0
-                            logger.info(f"✅ User {user_id} answered option {option_id} in poll {poll_id}")
+                            logger.info(f"[UPDATE] poll_answer from {user_id}: poll={poll_id} option={option_id}")
                             handle_poll_answer(user_id, poll_id, option_id)
-                    
+
                     except Exception as e:
-                        logger.error(f"❌ Exception processing update #{update_count}: {type(e).__name__}: {e}", exc_info=True)
+                        logger.error(f"Error processing update: {e}", exc_info=True)
                         continue
-            
+
             except Exception as e:
-                logger.error(f"❌ CRITICAL ERROR in polling loop: {type(e).__name__}: {e}", exc_info=True)
-                import time
-                time.sleep(5)  # Wait 5 seconds before retrying
-    
+                logger.error(f"Polling loop error: {e}", exc_info=True)
+                time.sleep(5)
+
     except KeyboardInterrupt:
         logger.info("👋 Bot stopped")
+
 
 if __name__ == "__main__":
     main()

@@ -28,7 +28,7 @@ TIMEZONE = pytz.timezone("Europe/Amsterdam")
 
 
 def scrape_daily_quiz():
-    """Fetch today's quiz directly (no subprocess)"""
+    """Fetch today's quiz by calling fetch_and_save_quiz directly"""
     logger.info("📥 [SCHEDULER] Scraping daily quiz at 9:55 AM...")
     try:
         from main_bot import fetch_and_save_quiz

@@ -260,13 +260,19 @@ def fetch_and_save_quiz():
         logger.error(f"❌ Error fetching quiz from API: {e}", exc_info=True)
 
 
-def send_message(chat_id, text):
+def _escape_html(text):
+    """Escape HTML special characters in user-generated content."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def send_message(chat_id, text, parse_mode="HTML"):
     """Send a text message via Telegram API"""
     data = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown"
     }
+    if parse_mode:
+        data["parse_mode"] = parse_mode
     try:
         response = requests.post(f"{API_URL}/sendMessage", json=data, timeout=10)
         result = response.json()
@@ -289,7 +295,7 @@ def send_poll(chat_id, question, options, correct_option_id):
         "type": "quiz",
         "correct_option_id": correct_option_id,
         "is_anonymous": False,
-        "explanation": f"✅ The correct answer is: **{options[correct_option_id]}**"
+        "explanation": f"✅ The correct answer is: {options[correct_option_id]}"
     }
     try:
         response = requests.post(f"{API_URL}/sendPoll", json=data, timeout=10)
@@ -315,10 +321,10 @@ def handle_start(chat_id, user_id):
 
     send_message(
         chat_id,
-        "🎉 Welcome to **Daily Puzzle Master**!\n\n"
+        "🎉 Welcome to <b>Daily Puzzle Master</b>!\n\n"
         "Get 10 fresh questions every day at 10:00 AM ⏰\n\n"
         "Answer them one by one and earn encouragement! 🌟\n\n"
-        "*What would you like to do?*"
+        "<b>What would you like to do?</b>"
     )
 
     requests.post(f"{API_URL}/sendMessage", json={
@@ -367,7 +373,8 @@ def start_quiz(chat_id, user_id):
         return
 
     total = len(quiz["questions"])
-    send_message(chat_id, f"📚 **{quiz.get('title', 'Daily Quiz')}**\n\nQuestion {progress + 1}/{total}")
+    title = _escape_html(quiz.get('title', 'Daily Quiz'))
+    send_message(chat_id, f"📚 <b>{title}</b>\n\nQuestion {progress + 1}/{total}")
     send_next_question(chat_id, user_id, quiz, progress)
 
 
@@ -435,7 +442,7 @@ def handle_poll_answer(user_id, poll_id, option_id):
         send_message(user_id, random.choice(ENCOURAGEMENTS))
     else:
         correct_answer = q["correct_answer"]
-        send_message(user_id, f"{random.choice(WRONG_MESSAGES)}\n\n💡 The correct answer was: **{correct_answer}**")
+        send_message(user_id, f"{random.choice(WRONG_MESSAGES)}\n\n💡 The correct answer was: <b>{_escape_html(correct_answer)}</b>")
 
     user_db.record_answer(
         user_id, quiz_id, question_index + 1, q["options"][option_id], was_correct,
@@ -501,7 +508,7 @@ def show_stats(chat_id, user_id):
     percentage = int((correct / total * 100)) if total > 0 else 0
     send_message(
         chat_id,
-        f"📊 **Your Stats**\n\n✅ Correct: {correct}\n❌ Wrong: {wrong}\n📝 Answered: {total}\n📈 Accuracy: {percentage}%"
+        f"📊 <b>Your Stats</b>\n\n✅ Correct: {correct}\n❌ Wrong: {wrong}\n📝 Answered: {total}\n📈 Accuracy: {percentage}%"
     )
 
 
@@ -519,13 +526,13 @@ def show_leaderboard(chat_id, user_id):
         leaderboard = user_db.get_today_leaderboard(quiz_id)
 
         if not leaderboard:
-            send_message(chat_id, "🏆 **Today's Leaderboard**\n\nNo scores yet. Be the first to complete the quiz!")
+            send_message(chat_id, "🏆 <b>Today's Leaderboard</b>\n\nNo scores yet. Be the first to complete the quiz!")
             return
 
-        quiz_title = quiz.get("title", "Daily Quiz")
+        quiz_title = _escape_html(quiz.get("title", "Daily Quiz"))
         total_q = len(quiz.get("questions", []))
 
-        message = f"🏆 **{quiz_title}**\n{quiz_id}\n\n"
+        message = f"🏆 <b>{quiz_title}</b>\n{_escape_html(quiz_id)}\n\n"
 
         medals = ["🥇", "🥈", "🥉"]
         top_count = min(3, len(leaderboard))
@@ -537,7 +544,10 @@ def show_leaderboard(chat_id, user_id):
                 username = row[1]
                 correct = int(row[2]) if row[2] is not None else 0
                 medal = medals[idx]
-                display_name = f"@{username}" if username and username != "Player" else f"Player {db_user_id % 10000}"
+                if username and username != "Player":
+                    display_name = f"@{_escape_html(username)}"
+                else:
+                    display_name = f"Player {db_user_id % 10000}"
                 message += f"{medal} {display_name} — {correct}/{total_q}\n"
             except Exception as e:
                 logger.error(f"Error processing leaderboard row {idx}: {e}", exc_info=True)
@@ -552,13 +562,13 @@ def show_leaderboard(chat_id, user_id):
                 break
 
         total_players = len(leaderboard)
-        message += f"\n**You: {user_score or 0}/{total_q}** — Rank #{user_rank or '—'} of {total_players}"
+        message += f"\n<b>You: {user_score or 0}/{total_q}</b> — Rank #{user_rank or '—'} of {total_players}"
 
         if user_rank is None:
             message += "\nStart the quiz to join the leaderboard!"
 
         if len(message) > 4000:
-            message = message[:3900] + "\n\n...*Leaderboard truncated*"
+            message = message[:3900] + "\n\n...<i>Leaderboard truncated</i>"
 
         result = send_message(chat_id, message)
         if not result:
@@ -618,7 +628,7 @@ def main():
                                 fetch_and_save_quiz()
                                 quiz = load_quiz()
                                 if quiz:
-                                    send_message(chat_id, f"✅ Got it! **{quiz['title']}** ({quiz.get('date', '?')}) — {len(quiz['questions'])} questions")
+                                    send_message(chat_id, f"✅ Got it! <b>{_escape_html(quiz['title'])}</b> ({_escape_html(quiz.get('date', '?'))}) — {len(quiz['questions'])} questions")
                                 else:
                                     send_message(chat_id, "❌ Failed to fetch quiz. Check logs.")
 

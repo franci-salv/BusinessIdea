@@ -11,6 +11,7 @@ import logging
 import sys
 import time
 import random
+import re
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
@@ -41,6 +42,8 @@ Path(os.path.dirname(DB_PATH)).mkdir(parents=True, exist_ok=True)
 processed_polls = set()
 # Map (user_id, poll_id) -> question index for the poll that was sent
 poll_question_map = {}
+# Users currently being asked to enter their 3-letter arcade name
+pending_arcade_name = set()
 
 ENCOURAGEMENTS = [
     "🎉 Fantastic! You got it!",
@@ -62,6 +65,17 @@ WRONG_MESSAGES = [
     "❌ Not this time. Keep learning!",
     "❌ That's incorrect. No worries!"
 ]
+
+MENU_KEYBOARD = {
+    "inline_keyboard": [
+        [{"text": "📚 Start Quiz", "callback_data": "start_quiz"}],
+        [{"text": "📊 My Stats", "callback_data": "stats"}],
+        [{"text": "🏆 Leaderboard", "callback_data": "leaderboard"}],
+        [{"text": "✏️ Change My Tag", "callback_data": "change_tag"}],
+        [{"text": "🛑 Unsubscribe", "callback_data": "unsubscribe"}]
+    ]
+}
+
 
 def _table_columns(conn, table):
     return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
@@ -97,6 +111,7 @@ class UserDB:
 
             _add_column_if_missing(conn, "users", "quiz_progress", "INTEGER DEFAULT 0")
             _add_column_if_missing(conn, "users", "today_quiz_date", "TEXT")
+            _add_column_if_missing(conn, "users", "arcade_name", "TEXT")
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS quiz_responses (
@@ -125,6 +140,50 @@ class UserDB:
                 conn.commit()
         except Exception as e:
             logger.error(f"Error adding user: {e}")
+
+    def get_arcade_name(self, user_id):
+        try:
+            with sqlite3.connect(self.db_path, timeout=5.0) as conn:
+                cursor = conn.execute(
+                    "SELECT arcade_name FROM users WHERE user_id = ?",
+                    (user_id,)
+                )
+                result = cursor.fetchone()
+                return result[0] if result and result[0] else None
+        except Exception as e:
+            logger.error(f"Error getting arcade name: {e}")
+            return None
+
+    def set_arcade_name(self, user_id, arcade_name):
+        try:
+            with sqlite3.connect(self.db_path, timeout=5.0) as conn:
+                conn.execute(
+                    "UPDATE users SET arcade_name = ? WHERE user_id = ?",
+                    (arcade_name.upper(), user_id)
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error setting arcade name: {e}")
+            return False
+
+    def is_arcade_name_taken(self, arcade_name, exclude_user_id=None):
+        try:
+            with sqlite3.connect(self.db_path, timeout=5.0) as conn:
+                if exclude_user_id:
+                    cursor = conn.execute(
+                        "SELECT COUNT(*) FROM users WHERE arcade_name = ? AND user_id != ?",
+                        (arcade_name.upper(), exclude_user_id)
+                    )
+                else:
+                    cursor = conn.execute(
+                        "SELECT COUNT(*) FROM users WHERE arcade_name = ?",
+                        (arcade_name.upper(),)
+                    )
+                return cursor.fetchone()[0] > 0
+        except Exception as e:
+            logger.error(f"Error checking arcade name: {e}")
+            return False
 
     def get_user_progress(self, user_id):
         try:
@@ -173,7 +232,7 @@ class UserDB:
                 cursor = conn.execute("""
                     SELECT
                       qr.user_id,
-                      COALESCE(u.username, 'Player') AS username,
+                      COALESCE(u.arcade_name, '???') AS display_name,
                       CAST(SUM(qr.is_correct) AS INTEGER) AS correct,
                       COUNT(*) AS answered
                     FROM quiz_responses qr
@@ -262,10 +321,10 @@ def fetch_and_save_quiz():
 
 def _escape_html(text):
     """Escape HTML special characters in user-generated content."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def send_message(chat_id, text, parse_mode="HTML"):
+def send_message(chat_id, text, parse_mode="HTML", reply_markup=None):
     """Send a text message via Telegram API"""
     data = {
         "chat_id": chat_id,
@@ -273,6 +332,8 @@ def send_message(chat_id, text, parse_mode="HTML"):
     }
     if parse_mode:
         data["parse_mode"] = parse_mode
+    if reply_markup:
+        data["reply_markup"] = reply_markup
     try:
         response = requests.post(f"{API_URL}/sendMessage", json=data, timeout=10)
         result = response.json()
@@ -284,6 +345,18 @@ def send_message(chat_id, text, parse_mode="HTML"):
     except Exception as e:
         logger.error(f"Error sending message to {chat_id}: {e}")
         return False
+
+
+def send_post_quiz_buttons(chat_id):
+    """Send action buttons after quiz completion."""
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "📊 My Stats", "callback_data": "stats"}],
+            [{"text": "🏆 Leaderboard", "callback_data": "leaderboard"}],
+            [{"text": "📚 Start Quiz", "callback_data": "start_quiz"}]
+        ]
+    }
+    send_message(chat_id, "What would you like to do next?", reply_markup=keyboard)
 
 
 def send_poll(chat_id, question, options, correct_option_id):
@@ -308,30 +381,74 @@ def send_poll(chat_id, question, options, correct_option_id):
     return None
 
 
-def handle_start(chat_id, user_id):
+def prompt_arcade_name(chat_id, user_id, is_change=False):
+    """Ask the user to enter a 3-letter arcade tag."""
+    pending_arcade_name.add(user_id)
+    if is_change:
+        current = user_db.get_arcade_name(user_id)
+        msg = (
+            f"✏️ Your current tag is <b>{_escape_html(current or '???')}</b>\n\n"
+            "Enter a new <b>3-letter tag</b> for the leaderboard:"
+        )
+    else:
+        msg = (
+            "🕹️ <b>Welcome, player!</b>\n\n"
+            "Before you start, pick a <b>3-letter tag</b> for the leaderboard.\n"
+            "Just like the old arcade days!\n\n"
+            "Type your 3 letters now (e.g. <b>ACE</b>, <b>MAX</b>, <b>ZAP</b>):"
+        )
+    send_message(chat_id, msg)
+
+
+def handle_arcade_name_input(chat_id, user_id, text):
+    """Validate and save the user's 3-letter arcade name."""
+    name = text.strip().upper()
+
+    if len(name) != 3 or not re.match(r'^[A-Z0-9]{3}$', name):
+        send_message(
+            chat_id,
+            "⚠️ Your tag must be exactly <b>3 letters or numbers</b> (A-Z, 0-9).\n"
+            "Try again:"
+        )
+        return
+
+    if user_db.is_arcade_name_taken(name, exclude_user_id=user_id):
+        send_message(
+            chat_id,
+            f"⚠️ <b>{_escape_html(name)}</b> is already taken! Pick another one:"
+        )
+        return
+
+    pending_arcade_name.discard(user_id)
+    user_db.set_arcade_name(user_id, name)
+    send_message(
+        chat_id,
+        f"✅ Your leaderboard tag is now <b>{_escape_html(name)}</b>! 🕹️"
+    )
+    show_main_menu(chat_id)
+
+
+def show_main_menu(chat_id):
+    """Show the main menu with action buttons."""
+    send_message(chat_id, "What would you like to do?", reply_markup=MENU_KEYBOARD)
+
+
+def handle_start(chat_id, user_id, username):
     """Handle /start command"""
-    keyboard = {
-        "inline_keyboard": [
-            [{"text": "📚 Start Quiz", "callback_data": "start_quiz"}],
-            [{"text": "📊 My Stats", "callback_data": "stats"}],
-            [{"text": "🏆 Today's Leaderboard", "callback_data": "leaderboard"}],
-            [{"text": "🛑 Unsubscribe", "callback_data": "unsubscribe"}]
-        ]
-    }
+    user_db.add_user(user_id, username)
 
     send_message(
         chat_id,
         "🎉 Welcome to <b>Daily Puzzle Master</b>!\n\n"
         "Get 10 fresh questions every day at 10:00 AM ⏰\n\n"
-        "Answer them one by one and earn encouragement! 🌟\n\n"
-        "<b>What would you like to do?</b>"
+        "Answer them one by one and earn encouragement! 🌟"
     )
 
-    requests.post(f"{API_URL}/sendMessage", json={
-        "chat_id": chat_id,
-        "text": "Choose an option:",
-        "reply_markup": keyboard
-    })
+    arcade_name = user_db.get_arcade_name(user_id)
+    if not arcade_name:
+        prompt_arcade_name(chat_id, user_id, is_change=False)
+    else:
+        show_main_menu(chat_id)
 
 
 def handle_callback(query_id, chat_id, user_id, data):
@@ -345,6 +462,8 @@ def handle_callback(query_id, chat_id, user_id, data):
         show_stats(chat_id, user_id)
     elif data == "leaderboard":
         show_leaderboard(chat_id, user_id)
+    elif data == "change_tag":
+        prompt_arcade_name(chat_id, user_id, is_change=True)
     elif data == "unsubscribe":
         user_db.add_user(user_id, "")
         send_message(chat_id, "✅ Unsubscribed! Use /start to resubscribe.")
@@ -355,6 +474,12 @@ def handle_callback(query_id, chat_id, user_id, data):
 def start_quiz(chat_id, user_id):
     """Start or resume quiz"""
     user_db.add_user(user_id, "")
+
+    arcade_name = user_db.get_arcade_name(user_id)
+    if not arcade_name:
+        prompt_arcade_name(chat_id, user_id, is_change=False)
+        return
+
     quiz = load_quiz()
     if not quiz or not quiz.get("questions"):
         send_message(chat_id, "❌ No quiz available today. Try again later!")
@@ -369,7 +494,8 @@ def start_quiz(chat_id, user_id):
         user_db.set_user_progress(user_id, 0, quiz_id)
 
     if progress >= len(quiz["questions"]):
-        send_message(chat_id, "🎉 You've completed today's quiz! Come back when the next quiz is available.")
+        send_message(chat_id, "🎉 You've already completed this quiz! Come back when the next one drops.")
+        send_post_quiz_buttons(chat_id)
         return
 
     total = len(quiz["questions"])
@@ -382,6 +508,7 @@ def send_next_question(chat_id, user_id, quiz, question_index):
     """Send the next question"""
     if question_index >= len(quiz["questions"]):
         send_message(chat_id, "🏆 All done! You completed today's quiz!")
+        send_post_quiz_buttons(chat_id)
         return
 
     q = quiz["questions"][question_index]
@@ -429,6 +556,7 @@ def handle_poll_answer(user_id, poll_id, option_id):
 
     if question_index >= len(quiz["questions"]):
         send_message(user_id, "🏆 All done! You already completed this quiz!")
+        send_post_quiz_buttons(user_id)
         return
 
     if question_index < progress:
@@ -457,6 +585,7 @@ def handle_poll_answer(user_id, poll_id, option_id):
     total = len(quiz["questions"])
     if progress >= total:
         send_message(user_id, f"🏆 Awesome! You completed all {total} questions! 🎉")
+        send_post_quiz_buttons(user_id)
         return
 
     send_next_question(user_id, user_id, quiz, progress)
@@ -504,11 +633,16 @@ def show_stats(chat_id, user_id):
         logger.error(f"Error fetching stats: {e}")
         correct, total = 0, 0
 
+    arcade_name = user_db.get_arcade_name(user_id) or "???"
     wrong = total - correct
     percentage = int((correct / total * 100)) if total > 0 else 0
     send_message(
         chat_id,
-        f"📊 <b>Your Stats</b>\n\n✅ Correct: {correct}\n❌ Wrong: {wrong}\n📝 Answered: {total}\n📈 Accuracy: {percentage}%"
+        f"📊 <b>Stats for {_escape_html(arcade_name)}</b>\n\n"
+        f"✅ Correct: {correct}\n"
+        f"❌ Wrong: {wrong}\n"
+        f"📝 Answered: {total}\n"
+        f"📈 Accuracy: {percentage}%"
     )
 
 
@@ -532,29 +666,25 @@ def show_leaderboard(chat_id, user_id):
         quiz_title = _escape_html(quiz.get("title", "Daily Quiz"))
         total_q = len(quiz.get("questions", []))
 
-        message = f"🏆 <b>{quiz_title}</b>\n{_escape_html(quiz_id)}\n\n"
+        message = f"🕹️ <b>{quiz_title}</b>\n📅 {_escape_html(quiz_id)}\n\n"
 
         medals = ["🥇", "🥈", "🥉"]
-        top_count = min(3, len(leaderboard))
 
-        for idx in range(top_count):
+        for idx, row in enumerate(leaderboard):
             try:
-                row = leaderboard[idx]
                 db_user_id = row[0]
-                username = row[1]
+                arcade_tag = row[1] or "???"
                 correct = int(row[2]) if row[2] is not None else 0
-                medal = medals[idx]
-                if username and username != "Player":
-                    display_name = f"@{_escape_html(username)}"
-                else:
-                    display_name = f"Player {db_user_id % 10000}"
-                message += f"{medal} {display_name} — {correct}/{total_q}\n"
+                rank_label = medals[idx] if idx < 3 else f"#{idx + 1}"
+                display = _escape_html(arcade_tag)
+                message += f"{rank_label} {display} — {correct}/{total_q}\n"
             except Exception as e:
                 logger.error(f"Error processing leaderboard row {idx}: {e}", exc_info=True)
                 continue
 
         user_rank = None
         user_score = None
+        user_tag = user_db.get_arcade_name(user_id) or "???"
         for idx, row in enumerate(leaderboard):
             if row[0] == user_id:
                 user_rank = idx + 1
@@ -562,7 +692,11 @@ def show_leaderboard(chat_id, user_id):
                 break
 
         total_players = len(leaderboard)
-        message += f"\n<b>You: {user_score or 0}/{total_q}</b> — Rank #{user_rank or '—'} of {total_players}"
+        message += (
+            f"\n<b>You ({_escape_html(user_tag)}): "
+            f"{user_score or 0}/{total_q}</b> — "
+            f"Rank #{user_rank or '—'} of {total_players}"
+        )
 
         if user_rank is None:
             message += "\nStart the quiz to join the leaderboard!"
@@ -616,14 +750,15 @@ def main():
 
                         if "message" in update:
                             msg = update["message"]
-                            logger.info(f"[UPDATE] message from {msg['from'].get('id')}: {msg.get('text', '')[:50]}")
-                            if msg.get("text") == "/start":
-                                user_id = msg["from"]["id"]
+                            user_id = msg["from"]["id"]
+                            chat_id = msg["chat"]["id"]
+                            text = msg.get("text", "")
+                            logger.info(f"[UPDATE] message from {user_id}: {text[:50]}")
+
+                            if text == "/start":
                                 username = msg["from"].get("username", "user")
-                                user_db.add_user(user_id, username)
-                                handle_start(msg["chat"]["id"], user_id)
-                            elif msg.get("text") == "/scrape":
-                                chat_id = msg["chat"]["id"]
+                                handle_start(chat_id, user_id, username)
+                            elif text == "/scrape":
                                 send_message(chat_id, "⏳ Fetching today's quiz...")
                                 fetch_and_save_quiz()
                                 quiz = load_quiz()
@@ -631,6 +766,8 @@ def main():
                                     send_message(chat_id, f"✅ Got it! <b>{_escape_html(quiz['title'])}</b> ({_escape_html(quiz.get('date', '?'))}) — {len(quiz['questions'])} questions")
                                 else:
                                     send_message(chat_id, "❌ Failed to fetch quiz. Check logs.")
+                            elif user_id in pending_arcade_name:
+                                handle_arcade_name_input(chat_id, user_id, text)
 
                         elif "callback_query" in update:
                             query = update["callback_query"]

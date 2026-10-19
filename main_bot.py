@@ -155,14 +155,24 @@ class UserDB:
             return None
 
     def set_arcade_name(self, user_id, arcade_name):
+        name = arcade_name.strip().upper()
+        if not re.fullmatch(r"[A-Z]{3}", name):
+            return False
         try:
             with sqlite3.connect(self.db_path, timeout=5.0) as conn:
-                conn.execute(
+                # Serialize the availability check and write across bot processes.
+                conn.execute("BEGIN IMMEDIATE")
+                if conn.execute(
+                    "SELECT 1 FROM users WHERE UPPER(arcade_name) = ? AND user_id != ?",
+                    (name, user_id)
+                ).fetchone():
+                    return False
+                cursor = conn.execute(
                     "UPDATE users SET arcade_name = ? WHERE user_id = ?",
-                    (arcade_name.upper(), user_id)
+                    (name, user_id)
                 )
                 conn.commit()
-                return True
+                return cursor.rowcount == 1
         except Exception as e:
             logger.error(f"Error setting arcade name: {e}")
             return False
@@ -349,14 +359,11 @@ def send_message(chat_id, text, parse_mode="HTML", reply_markup=None):
 
 def send_post_quiz_buttons(chat_id):
     """Send action buttons after quiz completion."""
-    keyboard = {
-        "inline_keyboard": [
-            [{"text": "📊 My Stats", "callback_data": "stats"}],
-            [{"text": "🏆 Leaderboard", "callback_data": "leaderboard"}],
-            [{"text": "📚 Start Quiz", "callback_data": "start_quiz"}]
-        ]
-    }
-    send_message(chat_id, "What would you like to do next?", reply_markup=keyboard)
+    send_message(
+        chat_id,
+        "What would you like to do next? Check your stats, see the leaderboard, or choose another option:",
+        reply_markup=MENU_KEYBOARD
+    )
 
 
 def send_poll(chat_id, question, options, correct_option_id):
@@ -395,6 +402,7 @@ def prompt_arcade_name(chat_id, user_id, is_change=False):
             "🕹️ <b>Welcome, player!</b>\n\n"
             "Before you start, pick a <b>3-letter tag</b> for the leaderboard.\n"
             "Just like the old arcade days!\n\n"
+            "Your Telegram username will never appear on the leaderboard.\n\n"
             "Type your 3 letters now (e.g. <b>ACE</b>, <b>MAX</b>, <b>ZAP</b>):"
         )
     send_message(chat_id, msg)
@@ -404,10 +412,10 @@ def handle_arcade_name_input(chat_id, user_id, text):
     """Validate and save the user's 3-letter arcade name."""
     name = text.strip().upper()
 
-    if len(name) != 3 or not re.match(r'^[A-Z0-9]{3}$', name):
+    if not re.fullmatch(r'[A-Z]{3}', name):
         send_message(
             chat_id,
-            "⚠️ Your tag must be exactly <b>3 letters or numbers</b> (A-Z, 0-9).\n"
+            "⚠️ Your tag must be exactly <b>3 letters</b> (A-Z).\n"
             "Try again:"
         )
         return
@@ -419,8 +427,10 @@ def handle_arcade_name_input(chat_id, user_id, text):
         )
         return
 
+    if not user_db.set_arcade_name(user_id, name):
+        send_message(chat_id, "⚠️ Couldn't save that tag. It may have just been taken. Please try again:")
+        return
     pending_arcade_name.discard(user_id)
-    user_db.set_arcade_name(user_id, name)
     send_message(
         chat_id,
         f"✅ Your leaderboard tag is now <b>{_escape_html(name)}</b>! 🕹️"
@@ -766,7 +776,8 @@ def main():
                                     send_message(chat_id, f"✅ Got it! <b>{_escape_html(quiz['title'])}</b> ({_escape_html(quiz.get('date', '?'))}) — {len(quiz['questions'])} questions")
                                 else:
                                     send_message(chat_id, "❌ Failed to fetch quiz. Check logs.")
-                            elif user_id in pending_arcade_name:
+                            elif text and (user_id in pending_arcade_name or not user_db.get_arcade_name(user_id)):
+                                user_db.add_user(user_id, "")
                                 handle_arcade_name_input(chat_id, user_id, text)
 
                         elif "callback_query" in update:

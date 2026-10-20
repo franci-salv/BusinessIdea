@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +36,49 @@ class ArcadeNamesTest(unittest.TestCase):
             for tag in ("A1B", "AB", "ABCD", "<A>", "éab"):
                 bot.handle_arcade_name_input(1, 1, tag)
                 self.assertIsNone(self.db.get_arcade_name(1))
+
+    def test_blocked_tags_rejected_by_handler_and_database(self):
+        bot.pending_arcade_name.add(1)
+        for tag in bot.BLOCKED_ARCADE_NAMES:
+            with self.subTest(tag=tag), patch.object(bot, "send_message") as send:
+                candidate = f" {tag.lower()} "
+                self.assertFalse(self.db.set_arcade_name(1, candidate))
+                bot.handle_arcade_name_input(1, 1, candidate)
+                self.assertIsNone(self.db.get_arcade_name(1))
+                self.assertIn(1, bot.pending_arcade_name)
+                self.assertNotIn("✅", str(send.call_args_list))
+
+    def test_rejected_change_preserves_current_tag(self):
+        self.assertTrue(self.db.set_arcade_name(1, "ACE"))
+        with patch.object(bot, "send_message") as send:
+            bot.handle_arcade_name_input(1, 1, "aSs")
+        self.assertIn("isn't allowed", send.call_args.args[1])
+        self.assertEqual(self.db.get_arcade_name(1), "ACE")
+
+    def test_ascii_only_and_safe_tags(self):
+        for tag in ("aſs", "ßa", "ＡＣＥ", "F A G", "F4G"):
+            with self.subTest(tag=tag):
+                self.assertFalse(self.db.set_arcade_name(1, tag))
+                with patch.object(bot, "send_message"):
+                    bot.handle_arcade_name_input(1, 1, tag)
+                self.assertIsNone(self.db.get_arcade_name(1))
+        for tag in ("ACE", "MAX", "ZAP", "CAT", "PIC"):
+            with self.subTest(tag=tag):
+                self.assertTrue(self.db.set_arcade_name(1, tag))
+
+    def test_startup_retires_existing_blocked_tags_and_preserves_scores(self):
+        self.db.set_arcade_name(2, "ACE")
+        self.db.record_answer(1, "today", 0, "answer", True)
+        with sqlite3.connect(self.db.db_path) as conn:
+            conn.execute("UPDATE users SET arcade_name = ' aSs ' WHERE user_id = 1")
+        self.db.init_db()
+        self.db.init_db()  # Safe to repeat on each restart.
+        self.assertIsNone(self.db.get_arcade_name(1))
+        self.assertEqual(self.db.get_arcade_name(2), "ACE")
+        self.assertEqual(self.db.get_today_leaderboard("today")[0][1:3], ("???", 1))
+        with patch.object(bot, "send_message"):
+            bot.handle_start(1, 1, "private_telegram_handle")
+        self.assertIn(1, bot.pending_arcade_name)
 
     def test_final_answer_sends_full_menu_after_completion(self):
         quiz = {"date": "today", "questions": [

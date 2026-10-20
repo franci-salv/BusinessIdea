@@ -45,6 +45,23 @@ poll_question_map = {}
 # Users currently being asked to enter their 3-letter arcade name
 pending_arcade_name = set()
 
+# Exact tags, not substrings: ordinary tags containing a C remain valid.
+BLOCKED_ARCADE_NAMES = frozenset({
+    "ASS", "ARS", "ARSE", "CUN", "C", "CUNT", "FUK", "FCK", "FUC", "FUX",
+    "FUCK", "PEE", "PIS", "PISS", "TWAT", "WOG", "JAP", "FAG",
+    "NIG", "NGR", "NGA", "KKK", "KIK", "KYK", "SPIC", "SPIK", "CHINK",
+    "SHIT", "SHT", "TIT", "DIC", "DIK", "DCK", "COCK", "COK", "COQ",
+    "CNT", "KNT", "KUN", "KUM", "CUM", "SEX", "XXX", "JIZ", "JZZ",
+    "BITCH", "BCH", "WTF", "STFU", "KYS",
+})
+
+
+def is_valid_arcade_name(name):
+    """Accept only three ASCII letters that are not reserved offensive tags."""
+    name = name.strip()
+    return bool(re.fullmatch(r"[A-Za-z]{3}", name)) and name.upper() not in BLOCKED_ARCADE_NAMES
+
+
 ENCOURAGEMENTS = [
     "🎉 Fantastic! You got it!",
     "⭐ Brilliant answer!",
@@ -113,6 +130,13 @@ class UserDB:
             _add_column_if_missing(conn, "users", "today_quiz_date", "TEXT")
             _add_column_if_missing(conn, "users", "arcade_name", "TEXT")
 
+            # Retire old offensive tags without changing scores or subscriptions.
+            for user_id, name in conn.execute(
+                "SELECT user_id, arcade_name FROM users WHERE arcade_name IS NOT NULL"
+            ).fetchall():
+                if not is_valid_arcade_name(name):
+                    conn.execute("UPDATE users SET arcade_name = NULL WHERE user_id = ?", (user_id,))
+
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS quiz_responses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,9 +179,9 @@ class UserDB:
             return None
 
     def set_arcade_name(self, user_id, arcade_name):
-        name = arcade_name.strip().upper()
-        if not re.fullmatch(r"[A-Z]{3}", name):
+        if not is_valid_arcade_name(arcade_name):
             return False
+        name = arcade_name.strip().upper()
         try:
             with sqlite3.connect(self.db_path, timeout=5.0) as conn:
                 # Serialize the availability check and write across bot processes.
@@ -410,14 +434,19 @@ def prompt_arcade_name(chat_id, user_id, is_change=False):
 
 def handle_arcade_name_input(chat_id, user_id, text):
     """Validate and save the user's 3-letter arcade name."""
-    name = text.strip().upper()
+    raw_name = text.strip()
+    name = raw_name.upper()
 
-    if not re.fullmatch(r'[A-Z]{3}', name):
+    if not re.fullmatch(r'[A-Za-z]{3}', raw_name):
         send_message(
             chat_id,
             "⚠️ Your tag must be exactly <b>3 letters</b> (A-Z).\n"
             "Try again:"
         )
+        return
+
+    if not is_valid_arcade_name(raw_name):
+        send_message(chat_id, "⚠️ That tag isn't allowed. Please choose a different 3-letter tag:")
         return
 
     if user_db.is_arcade_name_taken(name, exclude_user_id=user_id):
